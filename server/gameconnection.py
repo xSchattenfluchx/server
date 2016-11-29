@@ -127,8 +127,8 @@ class GameConnection(GpgNetServerProtocol):
             # If the player is joining, we connect him to host
             # followed by the rest of the players.
             elif player_state == PlayerState.JOINING:
-                await self.ConnectToHost(self.game.host.game_connection)
                 self._state = GameConnectionState.CONNECTED_TO_HOST
+                await self.ConnectToHost(self.game.host.game_connection)
                 self.game.add_game_connection(self)
                 for peer in self.game.connections:
                     if peer != self and peer.player != self.game.host:

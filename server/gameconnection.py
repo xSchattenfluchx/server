@@ -350,11 +350,13 @@ class GameConnection(GpgNetServerProtocol):
                     pass
 
             elif command == 'OperationComplete':
+                self._logger.debug("OperationComplete with args %s", args)
                 if int(args[0]) == 1:
                     secondary, delta = int(args[1]), str(args[2])
                     async with db.db_pool.get() as conn:
                         cursor = await conn.cursor()
                         # FIXME: Resolve used map earlier than this
+                        self._logger.debug("OperationComplete - looking for coop maps with map file path %s", self.game.map_file_path)
                         await cursor.execute("SELECT id FROM coop_map WHERE filename LIKE '%/"
                                              + self.game.map_file_path + ".%'")
                         (mission,) = await cursor.fetchone()

@@ -8,7 +8,8 @@ RUN pip install pipenv
 ADD . /code/
 WORKDIR /code/
 
-RUN pipenv install
+# TODO, don't install dev-time requirements in production runtime image
+RUN pipenv install -d
 
 # Main entrypoint and the default command that will be run
 CMD ["/usr/local/bin/pipenv", "run start"]

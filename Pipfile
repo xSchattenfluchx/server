@@ -1,0 +1,44 @@
+[[source]]
+
+url = "https://pypi.python.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[scripts]
+start = "python server.py"
+
+[packages]
+
+requests = "*"
+typing = "*"
+aiohttp = "*"
+aiomysql = "*"
+aiomeasures = "*"
+coveralls = "*"
+docopt = "*"
+pycrypto = "*"
+semver = "*"
+pygeoip = "*"
+pyflakes = "*"
+msgpack-python = "*"
+rsa = "*"
+trueskill = "*"
+aiocron = "*"
+marisa-trie = "*"
+"oauth2client" = "*"
+faftools = {git = "https://github.com/FAForever/faftools.git", ref = "bbb0b327782dd370731126787d22810cdd8ef052", editable=true}
+pyopenssl = "*"
+mock = "*"
+lupa = "*"
+
+
+[dev-packages]
+
+pytest = "*"
+pytest-mock = "*"
+pytest-cov = "*"
+
+
+[requires]
+
+python_version = "3.6"

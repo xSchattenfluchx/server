@@ -2,6 +2,7 @@ import asyncio
 from typing import Dict, List, Optional, Union, ValuesView
 
 import aiocron
+
 import server.db as db
 from server import GameState, VisibilityState
 from server.decorators import with_logger
@@ -9,9 +10,7 @@ from server.games import CoopGame, CustomGame, FeaturedMod, LadderGame
 from server.games.game import Game
 from server.matchmaker import MatchmakerQueue
 from server.players import Player
-
 from .ladder_service import LadderService
-from .team_matchmaking_service import TeamMatchmakingService
 
 
 @with_logger
@@ -37,8 +36,6 @@ class GameService:
 
         # Temporary proxy for the ladder service
         self.ladder_service = None
-
-        self.team_matchmaking_service = TeamMatchmakingService()
 
         # The set of active games
         self.games: Dict[int, Game] = dict()

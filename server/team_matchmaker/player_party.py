@@ -2,8 +2,6 @@ from server.players import Player
 
 
 class PlayerParty:
-    members: set[Player]
-    owner: Player
 
     def __init__(self, team_matchmaking_service: "TeamMatchmakingService", owner: Player):
         self.team_matchmaking_service = team_matchmaking_service

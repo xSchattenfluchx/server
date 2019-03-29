@@ -1,11 +1,11 @@
 import time
 from typing import NamedTuple
 
-from server import GameService
-from server.decorators import with_logger
+from .game_service import GameService
+from .decorators import with_logger
 from server.lobbyconnection import ClientError
-from server.players import Player
-from server.team_matchmaker.player_party import PlayerParty
+from .players import Player
+from .team_matchmaker.player_party import PlayerParty
 
 MapDescription = NamedTuple('Map', [("id", int), ("name", str), ("path", str)])
 GroupInvite = NamedTuple('GroupInvite', [("sender", Player), ("recipient", Player), ("party", PlayerParty), ("created_at", float)])
@@ -19,13 +19,11 @@ class TeamMatchmakingService:
     launches the games.
     """
 
-    player_parties: dict[Player, PlayerParty]  # player's current party
-    _pending_invites: dict[(Player, Player), GroupInvite]  # invited player -> current pending invite to this player
 
     def __init__(self, games_service: GameService):
         self.game_service = games_service
-        self.player_parties = dict()
-        self._pending_invites = dict()
+        self.player_parties: dict[Player, PlayerParty] = dict()
+        self._pending_invites: dict[(Player, Player), GroupInvite] = dict()
 
     def invite_player_to_party(self, sender: Player, recipient: Player):
         if sender not in self.player_parties:
@@ -46,18 +44,15 @@ class TeamMatchmakingService:
         })
 
     def accept_invite(self, recipient: Player, sender: Player):
-        if recipient not in self._pending_invites:
+        if (sender, recipient) not in self._pending_invites:
             raise ClientError("You're not invited to a party", recoverable=True)
 
-        pending_invite = self._pending_invites.get((sender, recipient))
+        pending_invite = self._pending_invites.pop((sender, recipient))
         if pending_invite.sender != sender:
             raise ClientError("Please request a new invite to that party.", recoverable=True)
 
         if pending_invite.party not in self.player_parties:
             raise ClientError("The party you're trying to join doesn't exist anymore.", recoverable=True)
-
-        if recipient in self._pending_invites:
-            self._pending_invites.pop((sender, recipient))
 
         pending_invite.party.add_player(recipient)
 
@@ -117,6 +112,6 @@ class TeamMatchmakingService:
     #
     #
     # TODO: check if player not in game/hosting/joining when entering queue, then set as in queue
-    #
+    # TODO: if player single auto create party on joing queue
     #
     #

@@ -53,6 +53,7 @@ class AuthenticationError(Exception):
         super().__init__(*args, **kwargs)
         self.message = message
 
+from .team_matchmaking_service import TeamMatchmakingService
 
 @with_logger
 class LobbyConnection():
@@ -63,7 +64,8 @@ class LobbyConnection():
         players: PlayerService,
         nts_client: Optional[TwilioNTS],
         geoip: GeoIpService,
-        matchmaker_queue: MatchmakerQueue
+        matchmaker_queue: MatchmakerQueue,
+        team_matchmaking_service: TeamMatchmakingService
     ):
         self.geoip_service = geoip
         self.game_service = games
@@ -71,6 +73,7 @@ class LobbyConnection():
         self.nts_client = nts_client
         self.coturn_generator = CoturnHMAC()
         self.matchmaker_queue = matchmaker_queue
+        self.team_matchmaking_service = team_matchmaking_service
         self._authenticated = False
         self.player = None  # type: Player
         self.game_connection = None  # type: GameConnection
@@ -913,25 +916,25 @@ class LobbyConnection():
         recipient = self.player_service.get_player(message["recipient_id"])
         if recipient is None:
             raise ClientError("The invited player doesn't exist", recoverable=True)
-        else:
-            self.game_service.team_matchmaking_service.invite_player_to_party(self.player, recipient)
+
+        self.team_matchmaking_service.invite_player_to_party(self.player, recipient)
 
     async def command_accept_party_invite(self, message):
         sender = self.player_service.get_player(message["sender_id"])
         if sender is None:
             raise ClientError("The inviting player doesn't exist", recoverable=True)
-        else:
-            self.game_service.team_matchmaking_service.accept_invite(self.player, sender)
+
+        self.team_matchmaking_service.accept_invite(self.player, sender)
 
     async def command_kick_player_from_party(self, message):
         kicked_player = self.player_service.get_player(message["kicked_player_id"])
         if kicked_player is None:
             raise ClientError("The kicked player doesn't exist", recoverable=True)
-        else:
-            self.game_service.team_matchmaking_service.kick_player_from_party(self.player, kicked_player)
+
+        self.game_service.team_matchmaking_service.kick_player_from_party(self.player, kicked_player)
 
     async def command_leave_party(self):
-        self.game_service.team_matchmaking_service.leave_party(self.player)
+        self.team_matchmaking_service.leave_party(self.player)
 
     def send_warning(self, message: str, fatal: bool=False):
         """

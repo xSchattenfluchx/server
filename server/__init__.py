@@ -40,13 +40,13 @@ __all__ = [
     'GameStatsService',
     'GameService',
     'LadderService',
+    'TeamMatchmakingService',
     'run_lobby_server',
     'run_control_server',
     'games',
     'control',
     'abc',
-    'protocol',
-    'TeamMatchmakingService'
+    'protocol'
 ]
 
 DIRTY_REPORT_INTERVAL = 1  # Seconds
@@ -89,7 +89,8 @@ def run_lobby_server(
     loop,
     nts_client: Optional[TwilioNTS],
     geoip_service: GeoIpService,
-    matchmaker_queue: MatchmakerQueue
+    matchmaker_queue: MatchmakerQueue,
+    team_matchmaking_service: TeamMatchmakingService
 ) -> ServerContext:
     """
     Run the lobby server
@@ -144,7 +145,8 @@ def run_lobby_server(
             games=games,
             nts_client=nts_client,
             players=player_service,
-            matchmaker_queue=matchmaker_queue
+            matchmaker_queue=matchmaker_queue,
+            team_matchmaking_service=team_matchmaking_service
         )
     ctx = ServerContext(make_connection, name="LobbyServer")
     loop.call_later(DIRTY_REPORT_INTERVAL, report_dirties)

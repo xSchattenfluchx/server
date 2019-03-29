@@ -15,6 +15,7 @@ import socket
 
 import server
 import server.config as config
+from server import TeamMatchmakingService
 from server.api.api_accessor import ApiAccessor
 from server.config import DB_SERVER, DB_PORT, DB_LOGIN, DB_PASSWORD, DB_NAME, TWILIO_ACCOUNT_SID
 from server.game_service import GameService
@@ -82,6 +83,7 @@ if __name__ == '__main__':
         game_stats_service = GameStatsService(event_service, achievement_service)
 
         games = GameService(players_online, game_stats_service)
+        team_matchmaking_service = TeamMatchmakingService(games)
 
         ctrl_server = loop.run_until_complete(server.run_control_server(loop, players_online, games))
 
@@ -92,7 +94,8 @@ if __name__ == '__main__':
             games=games,
             nts_client=twilio_nts,
             matchmaker_queue=MatchmakerQueue('ladder1v1', game_service=games),
-            loop=loop
+            loop=loop,
+            team_matchmaking_service=team_matchmaking_service
         )
 
         for sock in lobby_server.sockets:

@@ -11,6 +11,7 @@ from server.matchmaker import MatchmakerQueue
 from server.players import Player
 
 from .ladder_service import LadderService
+from .team_matchmaking_service import TeamMatchmakingService
 
 
 @with_logger
@@ -115,6 +116,9 @@ class GameService:
 
             # meh meh
             self.ladder_service = LadderService(self)
+
+            # meh meh meh, TODO: pls explain why I am doing this here
+            self.team_matchmaking_service = TeamMatchmakingService()
 
     @property
     def dirty_games(self):

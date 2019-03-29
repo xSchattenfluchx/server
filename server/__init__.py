@@ -26,6 +26,7 @@ from .game_service import GameService
 from .ladder_service import LadderService
 from .control import init as run_control_server
 from .matchmaker import MatchmakerQueue
+from .team_matchmaking_service import TeamMatchmakingService
 
 __version__ = '0.9.17'
 __author__ = 'Chris Kitching, Dragonfire, Gael Honorez, Jeroen De Dauw, Crotalus, Michael Søndergaard, Michel Jung'
@@ -44,7 +45,8 @@ __all__ = [
     'games',
     'control',
     'abc',
-    'protocol'
+    'protocol',
+    'TeamMatchmakingService'
 ]
 
 DIRTY_REPORT_INTERVAL = 1  # Seconds

@@ -48,8 +48,6 @@ class TeamMatchmakingService:
             raise ClientError("You're not invited to a party", recoverable=True)
 
         pending_invite = self._pending_invites.pop((sender, recipient))
-        if pending_invite.sender != sender:
-            raise ClientError("Please request a new invite to that party.", recoverable=True)
 
         if pending_invite.party not in self.player_parties:
             raise ClientError("The party you're trying to join doesn't exist anymore.", recoverable=True)

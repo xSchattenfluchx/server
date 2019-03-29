@@ -38,6 +38,8 @@ class GameService:
         # Temporary proxy for the ladder service
         self.ladder_service = None
 
+        self.team_matchmaking_service = TeamMatchmakingService()
+
         # The set of active games
         self.games: Dict[int, Game] = dict()
 
@@ -116,9 +118,6 @@ class GameService:
 
             # meh meh
             self.ladder_service = LadderService(self)
-
-            # meh meh meh, TODO: pls explain why I am doing this here
-            self.team_matchmaking_service = TeamMatchmakingService()
 
     @property
     def dirty_games(self):

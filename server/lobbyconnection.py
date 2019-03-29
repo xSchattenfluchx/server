@@ -910,18 +910,18 @@ class LobbyConnection():
         })
 
     async def command_invite_to_party(self, message):
-        invited_player = self.player_service.get_player(message["invited_player_id"])
-        if invited_player is None:
+        recipient = self.player_service.get_player(message["recipient_id"])
+        if recipient is None:
             raise ClientError("The invited player doesn't exist", recoverable=True)
         else:
-            self.game_service.team_matchmaking_service.invite_player_to_group(self.player, invited_player)
+            self.game_service.team_matchmaking_service.invite_player_to_party(self.player, recipient)
 
     async def command_accept_party_invite(self, message):
-        inviting_player = self.player_service.get_player(message["inviting_player_id"])
-        if inviting_player is None:
+        sender = self.player_service.get_player(message["sender_id"])
+        if sender is None:
             raise ClientError("The inviting player doesn't exist", recoverable=True)
         else:
-            self.game_service.team_matchmaking_service.accept_invite(self.player, inviting_player)
+            self.game_service.team_matchmaking_service.accept_invite(self.player, sender)
 
     async def command_kick_player_from_party(self, message):
         kicked_player = self.player_service.get_player(message["kicked_player_id"])

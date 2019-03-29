@@ -1,3 +1,4 @@
+import time
 from typing import NamedTuple
 
 from server import GameService
@@ -7,8 +8,9 @@ from server.players import Player
 from server.team_matchmaker.player_party import PlayerParty
 
 MapDescription = NamedTuple('Map', [("id", int), ("name", str), ("path", str)])
-GroupInvite = NamedTuple('GroupInvite', [("inviting", Player), ("invited", Player), ("party", PlayerParty)])
+GroupInvite = NamedTuple('GroupInvite', [("sender", Player), ("recipient", Player), ("party", PlayerParty), ("created_at", float)])
 
+PARTY_INVITE_TIMEOUT = 60 * 60 * 24  # secs
 
 @with_logger
 class TeamMatchmakingService:
@@ -17,46 +19,47 @@ class TeamMatchmakingService:
     launches the games.
     """
 
+    player_parties: dict[Player, PlayerParty]  # player's current party
+    _pending_invites: dict[(Player, Player), GroupInvite]  # invited player -> current pending invite to this player
+
     def __init__(self, games_service: GameService):
         self.game_service = games_service
-        self.player_parties = dict() # player -> current party
-        self._pending_invites = dict() # invited player -> current pending invite to this player
+        self.player_parties = dict()
+        self._pending_invites = dict()
 
-    def invite_player_to_group(self, inviting_player: Player, invited_player: Player):
-        if inviting_player not in self.player_parties:
-            self.player_parties[inviting_player] = PlayerParty(self, inviting_player)
+    def invite_player_to_party(self, sender: Player, recipient: Player):
+        if sender not in self.player_parties:
+            self.player_parties[sender] = PlayerParty(self, sender)
 
-        inviting_party = self.player_parties.get(inviting_player)
+        party = self.player_parties.get(sender)
 
-        if not inviting_party.owner == inviting_player:
+        if not party.owner == sender:
             raise ClientError("You do not own this party.", recoverable=True)
 
-        if inviting_player not in invited_player.friends:
-            raise ClientError("This person hasn't befriended you.", recoverable=True)
+        if sender in recipient.foes:
+            raise ClientError("This person doesn't accept invites from you.", recoverable=True)
 
-        self.clear_invites_to(invited_player)
-
-        self._pending_invites.add(GroupInvite(inviting_player, invited_player, inviting_party))
-        invited_player.lobby_connection.send({
+        self._pending_invites[(sender, recipient)] = GroupInvite(sender, recipient, party, time.time())
+        recipient.lobby_connection.send({
             "command": "party_invite",
-            "inviting_player": inviting_player.id
+            "sender": sender.id
         })
 
-    def accept_invite(self, accepting_player: Player, inviting_player: Player):
-        if accepting_player not in self._pending_invites:
+    def accept_invite(self, recipient: Player, sender: Player):
+        if recipient not in self._pending_invites:
             raise ClientError("You're not invited to a party", recoverable=True)
 
-        pending_invite = self._pending_invites.get(accepting_player)
-        if pending_invite.inviting != inviting_player:
+        pending_invite = self._pending_invites.get((sender, recipient))
+        if pending_invite.sender != sender:
             raise ClientError("Please request a new invite to that party.", recoverable=True)
 
         if pending_invite.party not in self.player_parties:
             raise ClientError("The party you're trying to join doesn't exist anymore.", recoverable=True)
 
-        if accepting_player in self._pending_invites:
-            self._pending_invites.pop(accepting_player)
+        if recipient in self._pending_invites:
+            self._pending_invites.pop((sender, recipient))
 
-        pending_invite.party.add_player(accepting_player)
+        pending_invite.party.add_player(recipient)
 
         self.remove_disbanded_parties()
 
@@ -81,26 +84,28 @@ class TeamMatchmakingService:
         self.player_parties.get(player).remove_player(player)
         self.remove_disbanded_parties()
 
-    def clear_invites_to(self, player: Player):
-        invites = {invite for invite in self._pending_invites if invite.invited == player}
+    def clear_invites(self):
+        invites = {invite for invite in self._pending_invites.values() if time.time() - invite.created_at >= PARTY_INVITE_TIMEOUT or invite.sender not in self.player_parties}
 
         for invite in invites:
-            self._pending_invites.pop(invite.invited)
+            self._pending_invites.pop((invite.sender, invite.recipient))
 
     def remove_party(self, party):
         # party is removed from player_parties dict by disband() removing the key value pair for each player
 
-        party_invites = {invite for invite in self._pending_invites if invite.party == party}
+        party_invites = {invite for invite in self._pending_invites.values() if invite.party == party}
         for invite in party_invites:
-            self._pending_invites.pop(invite.invited)
+            self._pending_invites.pop((invite.sender, invite.recipient))
 
         party.disband()
 
     def remove_disbanded_parties(self):
-        disbanded_parties = {party for party in self.player_parties if party.isDisbanded()}
+        disbanded_parties = {party for party in self.player_parties.values() if party.is_disbanded()}
 
         for party in disbanded_parties:
-            self.remove_party(party)
+            self.remove_party(party)  # this will call disband again therefore removing all players and informing them
+
+        self.clear_invites()
 
     # - accept group invite:  client->server
     # - invite to group:  client->server
@@ -111,7 +116,7 @@ class TeamMatchmakingService:
     #
     #
     #
-    #
+    # TODO: check if player not in game/hosting/joining when entering queue, then set as in queue
     #
     #
     #

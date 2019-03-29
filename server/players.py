@@ -12,7 +12,7 @@ class PlayerState(Enum):
     HOSTING = 3,
     JOINING = 4,
     SEARCHING_LADDER = 5,
-    IN_PARTY = 6,
+    SEARCHING_TEAM_MATCH = 6,
 
 
 class Player(BasePlayer):

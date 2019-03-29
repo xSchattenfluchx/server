@@ -103,12 +103,16 @@ Can be combined !, e.g. `{command: social, teaminvite: <...>, friends: <..>}`
 
 * `{command: ice_servers}`: Send ICE TURN/STUN servers - Returns: `{command: ice_servers, : <ice servers>, date_created: <date token was created in ISO 8601 format>, ttl: <ttl in seconds>}`
 
+#### Parties
+* `{command: invite_to_party, recipient_id: <...>}`: Invite this player to a party
+* `{command: accept_party_invite, sender_id: <...>}`: Accept the party invite from the given player
+* `{command: kick_player_from_party, kicked_player_id: <...>}`: Kick a player from a party you own
+* `{command: leave_party}`: Leave the party you are currently in
+
 ##### Misc
 
 * [deprecated] `{command: ask_session}`: response with an welcome command and an valid session (can be delayed)
 * `{command: fa_state, state: <on|...>}`: notify the server if the game has launched or closed
-* `{command: quit_team}`: Leave a team
-* `{command: accept_team_proposal, leader: <leader_name>}`: Accept Team Invitation
 * `{command: hello, version: <...>, login: <...>, password: <...>, unique_id: <...>, (session: <...>)}`: Accept Team Invitation
 
 ##  Stream

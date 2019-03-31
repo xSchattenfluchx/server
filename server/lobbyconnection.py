@@ -983,3 +983,4 @@ class LobbyConnection():
         if self.player:
             self._logger.debug("Lost lobby connection removing player {}".format(self.player.id))
             self.player_service.remove_player(self.player)
+        self.team_matchmaking_service.on_player_disconnected(self.player)

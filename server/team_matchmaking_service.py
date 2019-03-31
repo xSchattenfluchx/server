@@ -100,6 +100,11 @@ class TeamMatchmakingService:
 
         self.clear_invites()
 
+    def on_player_disconnected(self, player):
+        if player in self.player_parties:
+            self.leave_party(player)
+
+
     # - accept group invite:  client->server
     # - invite to group:  client->server
     # - kick from group:  client->server
@@ -110,6 +115,6 @@ class TeamMatchmakingService:
     #
     #
     # TODO: check if player not in game/hosting/joining when entering queue, then set as in queue
-    # TODO: if player single auto create party on joing queue
+    # TODO: if player single then auto create party on joing queue
     #
     #

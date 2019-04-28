@@ -8,10 +8,12 @@ from server.db.models import ban, friends_and_foes
 from server.game_service import GameService
 from server.games import CustomGame, Game
 from server.geoip_service import GeoIpService
+from server.ice_servers.nts import TwilioNTS
 from server.lobbyconnection import LobbyConnection
 from server.player_service import PlayerService
 from server.players import Player, PlayerState
 from server.protocol import QDataStreamProtocol
+from server.team_matchmaking_service import TeamMatchmakingService
 from server.types import Address
 from sqlalchemy import and_, select
 from tests import CoroMock
@@ -80,7 +82,8 @@ def lobbyconnection(loop, mock_protocol, mock_games, mock_players, mock_player, 
         games=mock_games,
         players=mock_players,
         nts_client=mock_nts_client,
-        matchmaker_queue=mock.Mock()
+        matchmaker_queue=mock.Mock(),
+        team_matchmaking_service=mock.create_autospec(TeamMatchmakingService)
     )
 
     lc.player = mock_player

@@ -12,13 +12,13 @@ GroupInvite = NamedTuple('GroupInvite', [("sender", Player), ("recipient", Playe
 
 PARTY_INVITE_TIMEOUT = 60 * 60 * 24  # secs
 
+
 @with_logger
 class TeamMatchmakingService:
     """
     Service responsible for managing the global team matchmaking. Does grouping, matchmaking, updates statistics, and
     launches the games.
     """
-
 
     def __init__(self, games_service: GameService):
         self.game_service = games_service
@@ -27,14 +27,14 @@ class TeamMatchmakingService:
 
     def invite_player_to_party(self, sender: Player, recipient: Player):
         if sender not in self.player_parties:
-            self.player_parties[sender] = PlayerParty(self, sender)
+            self.player_parties[sender] = PlayerParty(sender)
 
-        party = self.player_parties.get(sender)
+        party = self.player_parties[sender]
 
-        if not party.owner == sender:
+        if party.owner != sender:
             raise ClientError("You do not own this party.", recoverable=True)
 
-        if sender in recipient.foes:
+        if sender.id in recipient.foes:
             raise ClientError("This person doesn't accept invites from you.", recoverable=True)
 
         self._pending_invites[(sender, recipient)] = GroupInvite(sender, recipient, party, time.time())
@@ -49,9 +49,10 @@ class TeamMatchmakingService:
 
         pending_invite = self._pending_invites.pop((sender, recipient))
 
-        if pending_invite.party not in self.player_parties:
+        if self.player_parties.get(sender) != pending_invite.party:
             raise ClientError("The party you're trying to join doesn't exist anymore.", recoverable=True)
 
+        self.player_parties[recipient] = pending_invite.party
         pending_invite.party.add_player(recipient)
 
         self.remove_disbanded_parties()
@@ -60,7 +61,7 @@ class TeamMatchmakingService:
         if owner not in self.player_parties:
             raise ClientError("You're not in a party.", recoverable=True)
 
-        party = self.player_parties.get(owner)
+        party = self.player_parties[owner]
 
         if party.owner != owner:
             raise ClientError("You do not own that party.", recoverable=True)
@@ -74,29 +75,43 @@ class TeamMatchmakingService:
         if player not in self.player_parties:
             raise ClientError("You are not in a party.", recoverable=True)
 
-        self.player_parties.get(player).remove_player(player)
+        self.player_parties[player].remove_player(player)
+        self.player_parties.pop(player)
+
         self.remove_disbanded_parties()
 
     def clear_invites(self):
-        invites = {invite for invite in self._pending_invites.values() if time.time() - invite.created_at >= PARTY_INVITE_TIMEOUT or invite.sender not in self.player_parties}
+        invites = filter(
+            lambda inv: time.time() - inv.created_at >= PARTY_INVITE_TIMEOUT or
+            inv.sender not in self.player_parties,
+            self._pending_invites.values()
+        )
 
-        for invite in invites:
+        for invite in list(invites):
             self._pending_invites.pop((invite.sender, invite.recipient))
 
     def remove_party(self, party):
-        # party is removed from player_parties dict by disband() removing the key value pair for each player
+        # Party is removed from player_parties dict by disband() removing the
+        # key value pair for each player
 
-        party_invites = {invite for invite in self._pending_invites.values() if invite.party == party}
-        for invite in party_invites:
+        invites = filter(
+            lambda inv: inv.party == party,
+            self._pending_invites.values()
+        )
+        for invite in list(invites):
             self._pending_invites.pop((invite.sender, invite.recipient))
 
         party.disband()
 
     def remove_disbanded_parties(self):
-        disbanded_parties = {party for party in self.player_parties.values() if party.is_disbanded()}
+        disbanded_parties = filter(
+            lambda party: party.is_disbanded(),
+            self.player_parties.values()
+        )
 
-        for party in disbanded_parties:
-            self.remove_party(party)  # this will call disband again therefore removing all players and informing them
+        for party in list(disbanded_parties):
+            # This will call disband again therefore removing all players and informing them
+            self.remove_party(party)
 
         self.clear_invites()
 

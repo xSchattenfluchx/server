@@ -933,7 +933,7 @@ class LobbyConnection():
 
         self.team_matchmaking_service.kick_player_from_party(self.player, kicked_player)
 
-    async def command_leave_party(self):
+    async def command_leave_party(self, _message):
         self.team_matchmaking_service.leave_party(self.player)
 
     def send_warning(self, message: str, fatal: bool=False):

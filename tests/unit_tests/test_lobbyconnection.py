@@ -574,6 +574,7 @@ async def test_broadcast(lobbyconnection: LobbyConnection, mocker):
     player.lobby_connection.send_warning.assert_called_with("This is a test message")
     tuna.lobby_connection.send_warning.assert_called_with("This is a test message")
 
+
 async def test_game_connection_not_restored_if_no_such_game_exists(lobbyconnection: LobbyConnection, mocker, mock_player):
     protocol = mocker.patch.object(lobbyconnection, 'protocol')
     lobbyconnection.player = mock_player
@@ -589,6 +590,7 @@ async def test_game_connection_not_restored_if_no_such_game_exists(lobbyconnecti
         "style": "info",
         "text": "The game you were connected to does no longer exist"
     })
+
 
 @pytest.mark.parametrize("game_state", [GameState.INITIALIZING, GameState.ENDED])
 async def test_game_connection_not_restored_if_game_state_prohibits(lobbyconnection: LobbyConnection, game_service: GameService,
@@ -635,3 +637,54 @@ async def test_game_connection_restored_if_game_exists(lobbyconnection: LobbyCon
 
     assert lobbyconnection.game_connection
     assert lobbyconnection.player.state == PlayerState.PLAYING
+
+
+async def test_command_invite_to_party(lobbyconnection, mock_player):
+    lobbyconnection.player = mock_player
+    lobbyconnection.player.id = 2
+    lobbyconnection._authenticated = True
+
+    await lobbyconnection.on_message_received({
+        'command': 'invite_to_party',
+        'recipient_id': 1
+    })
+
+    lobbyconnection.team_matchmaking_service.invite_player_to_party.assert_called_once()
+
+
+async def test_command_accept_party_invite(lobbyconnection, mock_player):
+    lobbyconnection.player = mock_player
+    lobbyconnection.player.id = 2
+    lobbyconnection._authenticated = True
+
+    await lobbyconnection.on_message_received({
+        'command': 'accept_party_invite',
+        'sender_id': 1
+    })
+
+    lobbyconnection.team_matchmaking_service.accept_invite.assert_called_once()
+
+
+async def test_command_kick_player_from_party(lobbyconnection, mock_player):
+    lobbyconnection.player = mock_player
+    lobbyconnection.player.id = 2
+    lobbyconnection._authenticated = True
+
+    await lobbyconnection.on_message_received({
+        'command': 'kick_player_from_party',
+        'kicked_player_id': 1
+    })
+
+    lobbyconnection.team_matchmaking_service.kick_player_from_party.assert_called_once()
+
+
+async def test_command_leave_party(lobbyconnection, mock_player):
+    lobbyconnection.player = mock_player
+    lobbyconnection.player.id = 2
+    lobbyconnection._authenticated = True
+
+    await lobbyconnection.on_message_received({
+        'command': 'leave_party'
+    })
+
+    lobbyconnection.team_matchmaking_service.leave_party.assert_called_once()

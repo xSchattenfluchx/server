@@ -11,33 +11,33 @@ def team_mm_service(game_service):
     return TeamMatchmakingService(game_service)
 
 
-def mock_player(*args, **kwargs):
+def MockPlayer(*args, **kwargs) -> Player:
     player = Player(*args, **kwargs)
-    lobby_conn = mock.create_autospec(LobbyConnection)
-    player.lobby_connection = lobby_conn
-
-    return player, lobby_conn
+    player.send_message = mock.create_autospec(player.send_message)
+    return player
 
 
 def test_invite_player_to_party(team_mm_service):
-    sender, lc1 = mock_player(id=1)
-    receiver, lc2 = mock_player(id=2)
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
 
     team_mm_service.invite_player_to_party(sender, receiver)
 
 
 def test_invite_foe_to_party(team_mm_service):
-    sender, lc1 = mock_player(id=1)
-    receiver, lc2 = mock_player(id=2)
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
     receiver.foes = {1}
 
+    print(sender.id)
+    print(receiver.foes)
     with pytest.raises(ClientError):
         team_mm_service.invite_player_to_party(sender, receiver)
 
 
 def test_accept_invite(team_mm_service):
-    sender, lc1 = mock_player(id=1)
-    receiver, lc2 = mock_player(id=2)
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
 
     team_mm_service.invite_player_to_party(sender, receiver)
     assert team_mm_service.player_parties[sender].members == {sender}
@@ -47,16 +47,16 @@ def test_accept_invite(team_mm_service):
 
 
 def test_accept_invite_nonexistent(team_mm_service):
-    sender, lc1 = mock_player(id=1)
-    receiver, lc2 = mock_player(id=2)
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
 
     with pytest.raises(ClientError):
         team_mm_service.accept_invite(receiver, sender)
 
 
 def test_invite_player_to_party_not_owner(team_mm_service):
-    sender, lc1 = mock_player(id=1)
-    receiver, lc2 = mock_player(id=2)
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
 
     team_mm_service.invite_player_to_party(sender, receiver)
     team_mm_service.accept_invite(receiver, sender)
@@ -66,8 +66,8 @@ def test_invite_player_to_party_not_owner(team_mm_service):
 
 
 def test_kick_player(team_mm_service):
-    sender, lc1 = mock_player(id=1)
-    receiver, lc2 = mock_player(id=2)
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
 
     team_mm_service.invite_player_to_party(sender, receiver)
     team_mm_service.accept_invite(receiver, sender)
@@ -78,16 +78,16 @@ def test_kick_player(team_mm_service):
 
 
 def test_kick_player_nonexistent(team_mm_service):
-    sender, lc1 = mock_player(id=1)
-    receiver, lc2 = mock_player(id=2)
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
 
     with pytest.raises(ClientError):
         team_mm_service.kick_player_from_party(sender, receiver)
 
 
 def test_kick_player_not_in_party(team_mm_service):
-    sender, lc1 = mock_player(id=1)
-    receiver, lc2 = mock_player(id=2)
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
 
     team_mm_service.invite_player_to_party(sender, receiver)
 
@@ -96,8 +96,8 @@ def test_kick_player_not_in_party(team_mm_service):
 
 
 def test_leave_party(team_mm_service):
-    sender, lc1 = mock_player(id=1)
-    receiver, lc2 = mock_player(id=2)
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
 
     team_mm_service.invite_player_to_party(sender, receiver)
     team_mm_service.leave_party(sender)
@@ -106,8 +106,8 @@ def test_leave_party(team_mm_service):
 
 
 def test_leave_party_twice(team_mm_service):
-    sender, lc1 = mock_player(id=1)
-    receiver, lc2 = mock_player(id=2)
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
 
     team_mm_service.invite_player_to_party(sender, receiver)
     team_mm_service.leave_party(sender)
@@ -119,7 +119,7 @@ def test_leave_party_twice(team_mm_service):
 
 
 def test_leave_party_nonexistent(team_mm_service):
-    player, _ = mock_player(id=1)
+    player = MockPlayer(id=1)
 
     with pytest.raises(ClientError):
         team_mm_service.leave_party(player)

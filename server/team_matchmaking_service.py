@@ -37,7 +37,7 @@ class TeamMatchmakingService:
             raise ClientError("This person doesn't accept invites from you.", recoverable=True)
 
         self._pending_invites[(sender, recipient)] = GroupInvite(sender, recipient, party, time.time())
-        recipient.lobby_connection.send({
+        recipient.send_message({
             "command": "party_invite",
             "sender": sender.id
         })

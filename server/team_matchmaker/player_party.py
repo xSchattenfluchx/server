@@ -26,7 +26,7 @@ class PlayerParty:
             self.send_party(player)
 
     def send_party(self, player: Player):
-        player.lobby_connection.send({
+        player.send_message({
             "command": "update_party",
             "owner": self.owner,
             "members": [m.id for m in self.members]

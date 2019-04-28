@@ -121,6 +121,10 @@ class Player(BasePlayer):
     def in_game(self):
         return self.game is not None
 
+    def send_message(self, message):
+        assert self.lobby_connection
+        self.lobby_connection.send(message)
+
     def to_dict(self):
         """
         Return a dictionary representing this player object

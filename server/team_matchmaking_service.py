@@ -7,7 +7,6 @@ from server.lobbyconnection import ClientError
 from .players import Player
 from .team_matchmaker.player_party import PlayerParty
 
-MapDescription = NamedTuple('Map', [("id", int), ("name", str), ("path", str)])
 GroupInvite = NamedTuple('GroupInvite', [("sender", Player), ("recipient", Player), ("party", PlayerParty), ("created_at", float)])
 
 PARTY_INVITE_TIMEOUT = 60 * 60 * 24  # secs

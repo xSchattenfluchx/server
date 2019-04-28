@@ -931,7 +931,7 @@ class LobbyConnection():
         if kicked_player is None:
             raise ClientError("The kicked player doesn't exist", recoverable=True)
 
-        self.game_service.team_matchmaking_service.kick_player_from_party(self.player, kicked_player)
+        self.team_matchmaking_service.kick_player_from_party(self.player, kicked_player)
 
     async def command_leave_party(self):
         self.team_matchmaking_service.leave_party(self.player)

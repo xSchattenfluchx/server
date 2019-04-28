@@ -46,9 +46,12 @@ class TeamMatchmakingService:
         if (sender, recipient) not in self._pending_invites:
             raise ClientError("You're not invited to a party", recoverable=True)
 
+        if recipient in self.player_parties:
+            raise ClientError("You're already in a party", recoverable=True)
+
         pending_invite = self._pending_invites.pop((sender, recipient))
 
-        if self.player_parties.get(sender) != pending_invite.party:
+        if pending_invite.party != self.player_parties.get(sender):
             raise ClientError("The party you're trying to join doesn't exist anymore.", recoverable=True)
 
         self.player_parties[recipient] = pending_invite.party
@@ -90,9 +93,18 @@ class TeamMatchmakingService:
             self._pending_invites.pop((invite.sender, invite.recipient))
 
     def remove_party(self, party):
-        # Party is removed from player_parties dict by disband() removing the
-        # key value pair for each player
+        # Remove all players who were in the party
+        party_members = map(
+            lambda i: i[0],
+            filter(
+                lambda i: party == i[1],
+                self.player_parties.items()
+            )
+        )
+        for player in list(party_members):
+            self.player_parties.pop(player)
 
+        # Remove all invites to the party
         invites = filter(
             lambda inv: inv.party == party,
             self._pending_invites.values()

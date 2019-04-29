@@ -1,7 +1,9 @@
 import pytest
 from server import VisibilityState
+from server.players import PlayerState
 
-from .conftest import connect_client, perform_login, read_until, connect_and_sign_in
+from .conftest import (connect_and_sign_in, connect_client, perform_login,
+                       read_until)
 from .testclient import ClientTest
 
 TEST_ADDRESS = ('127.0.0.1', None)
@@ -123,6 +125,36 @@ async def test_old_client_error(loop, lobby_server, player_service):
     msg = await proto.read_message()
     assert msg == error_msg
 
+
+async def test_play_game_while_queueing(loop, lobby_server, player_service):
+    player_id, session, proto = await connect_and_sign_in(
+        ('test', 'test_password'),
+        lobby_server
+    )
+
+    await read_until(proto, lambda msg: msg['command'] == 'game_info')
+
+    proto.send_message({
+        'command': 'game_matchmaking',
+        'state': 'start',
+        'faction': 'uef'
+    })
+
+    proto.send_message({'command': 'game_host'})
+    msg = await proto.read_message()
+    assert msg == {'command': 'invalid_state', 'state': PlayerState.SEARCHING_LADDER.value}
+
+    proto.send_message({'command': 'game_join'})
+    msg = await proto.read_message()
+    assert msg == {'command': 'invalid_state', 'state': PlayerState.SEARCHING_LADDER.value}
+
+    proto.send_message({
+        'command': 'game_matchmaking',
+        'state': 'start',
+        'faction': 'cybran'
+    })
+    msg = await proto.read_message()
+    assert msg == {'command': 'invalid_state', 'state': PlayerState.SEARCHING_LADDER.value}
 
 
 @slow

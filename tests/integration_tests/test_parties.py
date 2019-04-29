@@ -1,5 +1,6 @@
+from server.players import PlayerState
+
 from .conftest import connect_and_sign_in, read_until
-import asyncio
 
 
 async def test_invite_party_workflow(loop, lobby_server):
@@ -100,3 +101,29 @@ async def test_kick_player_non_existent(loop, lobby_server):
 
     msg = await proto.read_message()
     assert msg == {'command': 'notice', 'style': 'error', 'text': "The kicked player doesn't exist"}
+
+
+async def test_party_while_queuing(loop, lobby_server):
+    test_id, _, proto = await connect_and_sign_in(
+        ('test', 'test_password'), lobby_server
+    )
+
+    await read_until(proto, lambda msg: msg['command'] == 'game_info')
+
+    proto.send_message({
+        'command': 'game_matchmaking',
+        'state': 'start',
+        'faction': 'uef'
+    })
+
+    proto.send_message({'command': 'invite_to_party'})
+    msg = await proto.read_message()
+    assert msg == {'command': 'invalid_state', 'state': PlayerState.SEARCHING_LADDER.value}
+
+    proto.send_message({'command': 'accept_party_invite'})
+    msg = await proto.read_message()
+    assert msg == {'command': 'invalid_state', 'state': PlayerState.SEARCHING_LADDER.value}
+
+    proto.send_message({'command': 'kick_player_from_party'})
+    msg = await proto.read_message()
+    assert msg == {'command': 'invalid_state', 'state': PlayerState.SEARCHING_LADDER.value}

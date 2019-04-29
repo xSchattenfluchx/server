@@ -1,9 +1,9 @@
 import time
-from typing import NamedTuple
+from typing import NamedTuple, Optional
 
-from .game_service import GameService
 from .decorators import with_logger
-from server.lobbyconnection import ClientError
+from .game_service import GameService
+from .lobbyconnection import ClientError
 from .players import Player
 from .team_matchmaker.player_party import PlayerParty
 
@@ -23,6 +23,9 @@ class TeamMatchmakingService:
         self.game_service = games_service
         self.player_parties: dict[Player, PlayerParty] = dict()
         self._pending_invites: dict[(Player, Player), GroupInvite] = dict()
+
+    def get_party(self, owner: Player) -> Optional[PlayerParty]:
+        self.player_parties.get(owner)
 
     def invite_player_to_party(self, sender: Player, recipient: Player):
         if sender not in self.player_parties:

@@ -190,7 +190,7 @@ def make_game(uid, players):
 def create_player():
     from server.players import Player, PlayerState
 
-    def make(login='', id=0, port=6112, state=PlayerState.HOSTING, ip='127.0.0.1', global_rating=Rating(1500, 250), ladder_rating=Rating(1500, 250)):
+    def make(login='', id=0, state=PlayerState.IDLE, ip='127.0.0.1', global_rating=Rating(1500, 250), ladder_rating=Rating(1500, 250)):
         p = mock.create_autospec(spec=Player(login))
         p.global_rating = global_rating
         p.ladder_rating = ladder_rating
@@ -206,9 +206,9 @@ def create_player():
 def players(create_player):
     from server.players import PlayerState
     return mock.Mock(
-        hosting=create_player(login='Paula_Bean', id=1, port=6112, state=PlayerState.HOSTING),
-        peer=create_player(login='That_Guy', id=2, port=6112, state=PlayerState.JOINING),
-        joining=create_player(login='James_Kirk', id=3, port=6112, state=PlayerState.JOINING)
+        hosting=create_player(login='Paula_Bean', id=1, state=PlayerState.HOSTING),
+        peer=create_player(login='That_Guy', id=2, state=PlayerState.JOINING),
+        joining=create_player(login='James_Kirk', id=3, state=PlayerState.JOINING)
     )
 
 

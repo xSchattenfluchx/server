@@ -7,12 +7,12 @@ from .abc.base_player import BasePlayer
 
 @unique
 class PlayerState(Enum):
-    IDLE = 1,
-    PLAYING = 2,
-    HOSTING = 3,
-    JOINING = 4,
-    SEARCHING_LADDER = 5,
-    SEARCHING_TEAM_MATCH = 6,
+    IDLE = 1
+    PLAYING = 2
+    HOSTING = 3
+    JOINING = 4
+    SEARCHING_LADDER = 5
+    SEARCHING_TEAM_MATCH = 6
 
 
 class Player(BasePlayer):

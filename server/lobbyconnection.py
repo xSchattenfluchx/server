@@ -6,6 +6,7 @@ import json
 import random
 import urllib.parse
 import urllib.request
+from functools import wraps
 from typing import Optional
 
 import requests
@@ -53,7 +54,9 @@ class AuthenticationError(Exception):
         super().__init__(*args, **kwargs)
         self.message = message
 
+
 from .team_matchmaking_service import TeamMatchmakingService
+
 
 @with_logger
 class LobbyConnection():
@@ -91,8 +94,7 @@ class LobbyConnection():
     def authenticated(self):
         return self._authenticated
 
-    @asyncio.coroutine
-    def on_connection_made(self, protocol: QDataStreamProtocol, peername: Address):
+    async def on_connection_made(self, protocol: QDataStreamProtocol, peername: Address):
         self.protocol = protocol
         self.peer_address = peername
         server.stats.incr("server.connections")
@@ -173,8 +175,7 @@ class LobbyConnection():
     def command_pong(self, msg):
         pass
 
-    @asyncio.coroutine
-    def command_create_account(self, message):
+    async def command_create_account(self, message):
         raise ClientError("FAF no longer supports direct registration. Please use the website to register.", recoverable=True)
 
     async def send_coop_maps(self):
@@ -692,15 +693,32 @@ class LobbyConnection():
         else:
             raise KeyError('invalid action')
 
-    @timed
-    def command_game_join(self, message):
+    def ice_only(func):
+        """ Ensures that a handler function is not invoked from a non ICE client"""
+        @wraps(func)
+        async def wrapper(self, message):
+            if self._attempted_connectivity_test:
+                raise ClientError("Cannot join game. Please update your client to the newest version.")
+            return await func(self, message)
+        return wrapper
+
+    def player_idle(func):
+        """ Ensures that a handler function is not invoked unless the player state is IDLE"""
+        @wraps(func)
+        async def wrapper(self, message):
+            if self.player.state != PlayerState.IDLE:
+                self.send({'command': 'invalid_state', 'state': self.player.state.value})
+                return
+            return await func(self, message)
+        return wrapper
+
+    @ice_only
+    @player_idle
+    async def command_game_join(self, message):
         """
         We are going to join a game.
         """
         assert isinstance(self.player, Player)
-
-        if self._attempted_connectivity_test:
-            raise ClientError("Cannot join game. Please update your client to the newest version.")
 
         uuid = int(message['uid'])
         password = message.get('password', None)
@@ -722,18 +740,31 @@ class LobbyConnection():
         except KeyError:
             self.sendJSON(dict(command="notice", style="info", text="The host has left the game"))
 
+    @ice_only
+    @player_idle
     async def command_game_matchmaking(self, message):
         mod = message.get('mod', 'ladder1v1')
         state = message['state']
-
-        if self._attempted_connectivity_test:
-            raise ClientError("Cannot host game. Please update your client to the newest version.")
+        party = self.team_matchmaking_service.get_party(self.player)
 
         if state == "stop":
             if self.search:
                 self._logger.info("%s stopped searching for ladder: %s", self.player, self.search)
                 self.search.cancel()
             return
+
+        if party is not None:
+            busy = False
+            for player in party.members:
+                if player.state != PlayerState.IDLE:
+                    busy = True
+                    self.send({
+                        'command': 'invalid_state',
+                        'state': player.state.value,
+                        'player': player.id
+                    })
+            if busy:
+                return
 
         async with db.engine.acquire() as conn:
             result = await conn.execute("SELECT id FROM matchmaker_ban WHERE `userid` = %s", (self.player.id))
@@ -760,12 +791,10 @@ class LobbyConnection():
         """ Request for coop map list"""
         asyncio.ensure_future(self.send_coop_maps())
 
-    @timed()
-    def command_game_host(self, message):
+    @ice_only
+    @player_idle
+    async def command_game_host(self, message):
         assert isinstance(self.player, Player)
-
-        if self._attempted_connectivity_test:
-            raise ClientError("Cannot join game. Please update your client to the newest version.")
 
         visibility = VisibilityState.from_string(message.get('visibility'))
         if not isinstance(visibility, VisibilityState):
@@ -912,6 +941,7 @@ class LobbyConnection():
             'ttl': ttl
         })
 
+    @player_idle
     async def command_invite_to_party(self, message):
         recipient = self.player_service.get_player(message["recipient_id"])
         if recipient is None:
@@ -919,6 +949,7 @@ class LobbyConnection():
 
         self.team_matchmaking_service.invite_player_to_party(self.player, recipient)
 
+    @player_idle
     async def command_accept_party_invite(self, message):
         sender = self.player_service.get_player(message["sender_id"])
         if sender is None:
@@ -926,6 +957,7 @@ class LobbyConnection():
 
         self.team_matchmaking_service.accept_invite(self.player, sender)
 
+    @player_idle
     async def command_kick_player_from_party(self, message):
         kicked_player = self.player_service.get_player(message["kicked_player_id"])
         if kicked_player is None:

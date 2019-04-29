@@ -61,30 +61,7 @@ async def test_player_info_broadcast(loop, lobby_server):
     p2.close()
 
 
-@pytest.mark.slow
-async def test_public_host(loop, lobby_server, player_service):
-    # TODO: This test can't fail, why is it here?
-    player_id, session, proto = await connect_and_sign_in(
-        ('test', 'test_password'),
-        lobby_server
-    )
-
-    await read_until(proto, lambda msg: msg['command'] == 'game_info')
-
-    with ClientTest(loop=loop, process_nat_packets=True, proto=proto) as client:
-        proto.send_message({
-            'command': 'game_host',
-            'mod': 'faf',
-            'visibility': VisibilityState.to_string(VisibilityState.PUBLIC)
-        })
-        await proto.drain()
-
-        client.send_GameState(['Idle'])
-        client.send_GameState(['Lobby'])
-        await client._proto.writer.drain()
-
-
-@pytest.mark.slow
+@slow
 async def test_host_missing_fields(loop, lobby_server, player_service):
     player_id, session, proto = await connect_and_sign_in(
         ('test', 'test_password'),
@@ -107,3 +84,65 @@ async def test_host_missing_fields(loop, lobby_server, player_service):
     assert msg['mapname'] == 'scmp_007'
     assert msg['map_file_path'] == 'maps/scmp_007.zip'
     assert msg['featured_mod'] == 'faf'
+
+
+@slow
+async def test_old_client_error(loop, lobby_server, player_service):
+    error_msg = {
+        'command': 'notice',
+        'style': 'error',
+        'text': 'Cannot join game. Please update your client to the newest version.'
+    }
+    player_id, session, proto = await connect_and_sign_in(
+        ('test', 'test_password'),
+        lobby_server
+    )
+
+    await read_until(proto, lambda msg: msg['command'] == 'game_info')
+
+    proto.send_message({
+        'command': 'InitiateTest',
+        'target': 'connectivity'
+    })
+    msg = await proto.read_message()
+    assert msg == {
+        'command': 'notice',
+        'style': 'error',
+        'text': 'Your client version is no longer supported. Please update to the newest version: https://faforever.com'
+    }
+
+    proto.send_message({'command': 'game_host'})
+    msg = await proto.read_message()
+    assert msg == error_msg
+
+    proto.send_message({'command': 'game_join'})
+    msg = await proto.read_message()
+    assert msg == error_msg
+
+    proto.send_message({'command': 'game_matchmaking', 'state': 'start'})
+    msg = await proto.read_message()
+    assert msg == error_msg
+
+
+
+@slow
+async def test_public_host(loop, lobby_server, player_service):
+    # TODO: This test can't fail, why is it here?
+    player_id, session, proto = await connect_and_sign_in(
+        ('test', 'test_password'),
+        lobby_server
+    )
+
+    await read_until(proto, lambda msg: msg['command'] == 'game_info')
+
+    with ClientTest(loop=loop, process_nat_packets=True, proto=proto) as client:
+        proto.send_message({
+            'command': 'game_host',
+            'mod': 'faf',
+            'visibility': VisibilityState.to_string(VisibilityState.PUBLIC)
+        })
+        await proto.drain()
+
+        client.send_GameState(['Idle'])
+        client.send_GameState(['Lobby'])
+        await client._proto.writer.drain()

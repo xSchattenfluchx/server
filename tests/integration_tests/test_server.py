@@ -64,7 +64,7 @@ async def test_player_info_broadcast(loop, lobby_server):
 
 
 @slow
-async def test_host_missing_fields(loop, lobby_server, player_service):
+async def test_host_missing_fields(loop, lobby_server):
     player_id, session, proto = await connect_and_sign_in(
         ('test', 'test_password'),
         lobby_server
@@ -89,7 +89,7 @@ async def test_host_missing_fields(loop, lobby_server, player_service):
 
 
 @slow
-async def test_old_client_error(loop, lobby_server, player_service):
+async def test_old_client_error(loop, lobby_server):
     error_msg = {
         'command': 'notice',
         'style': 'error',
@@ -126,7 +126,7 @@ async def test_old_client_error(loop, lobby_server, player_service):
     assert msg == error_msg
 
 
-async def test_play_game_while_queueing(loop, lobby_server, player_service):
+async def test_play_game_while_queueing(loop, lobby_server):
     player_id, session, proto = await connect_and_sign_in(
         ('test', 'test_password'),
         lobby_server
@@ -155,26 +155,3 @@ async def test_play_game_while_queueing(loop, lobby_server, player_service):
     })
     msg = await proto.read_message()
     assert msg == {'command': 'invalid_state', 'state': PlayerState.SEARCHING_LADDER.value}
-
-
-@slow
-async def test_public_host(loop, lobby_server, player_service):
-    # TODO: This test can't fail, why is it here?
-    player_id, session, proto = await connect_and_sign_in(
-        ('test', 'test_password'),
-        lobby_server
-    )
-
-    await read_until(proto, lambda msg: msg['command'] == 'game_info')
-
-    with ClientTest(loop=loop, process_nat_packets=True, proto=proto) as client:
-        proto.send_message({
-            'command': 'game_host',
-            'mod': 'faf',
-            'visibility': VisibilityState.to_string(VisibilityState.PUBLIC)
-        })
-        await proto.drain()
-
-        client.send_GameState(['Idle'])
-        client.send_GameState(['Lobby'])
-        await client._proto.writer.drain()

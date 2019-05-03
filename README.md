@@ -77,7 +77,7 @@ With most carrying a footer containing:
     LOGIN: QString
     SESSION: QString
 
-With a few message-types (`UPLOAD_MOD`, `UPLOAD_MAP`), there are more fields.
+With a few message-types there are more fields.
 
 ## Incoming Packages
 
@@ -89,10 +89,8 @@ With a few message-types (`UPLOAD_MOD`, `UPLOAD_MAP`), there are more fields.
 * `{command: modvault, type: addcomment}`: not implemented
 
 ##### Social
-Can be combined !, e.g. `{command: social, teaminvite: <...>, friends: <..>}`
-* `{command: social, teaminvite: <player_name>}`: Invite a Player to a Team
-* `{command: social, friends: <list of ALL friends>}`: Update the friends on the db
-* `{command: social, foes: <list of ALL foes>}`: Update the foe (muted players) on the db
+* `{command: social_add[, friend: <player_id>|, foe: <player_id>]}`: Add a friend or foe
+* `{command: social_remove[, friend: <player_id>|, foe: <player_id>]}`: Remove a friend or foe
 
 ##### Avatar
 * `{command: avatar, action: upload_avatar, name: <avatar_name>, file: <file_content>, description: <desc>}`: Admin Command to upload an avatar
@@ -108,11 +106,12 @@ Can be combined !, e.g. `{command: social, teaminvite: <...>, friends: <..>}`
 * `{command: accept_party_invite, sender_id: <...>}`: Accept the party invite from the given player
 * `{command: kick_player_from_party, kicked_player_id: <...>}`: Kick a player from a party you own
 * `{command: leave_party}`: Leave the party you are currently in
+* `{command: ready_party}`: Ready up in your party
+* `{command: unready_party}`: Un-ready in your party
 
 ##### Misc
 
 * [deprecated] `{command: ask_session}`: response with an welcome command and an valid session (can be delayed)
-* `{command: fa_state, state: <on|...>}`: notify the server if the game has launched or closed
 * `{command: hello, version: <...>, login: <...>, password: <...>, unique_id: <...>, (session: <...>)}`: Accept Team Invitation
 
 ##  Stream
@@ -121,5 +120,3 @@ The stream API is deprecated, but currently the following message types are supp
 
 * `PING`: response with a `PONG`
 * `PONG`: internal state changed to ponged
-* `UPLOAD_MOD, login, session, zipmap, infos, size, fileDaatas`: Upload a mod
-* `UPLOAD_MAP, login, session, zipmap, infos, size, fileDatas`: Upload a map

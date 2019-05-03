@@ -12,9 +12,10 @@ def team_mm_service(game_service):
     return TeamMatchmakingService(game_service)
 
 
-def MockPlayer(*args, **kwargs) -> Player:
-    player = Player(*args, **kwargs)
-    player.send_message = mock.create_autospec(player.send_message)
+def MockPlayer(id) -> Player:
+    player = mock.create_autospec(Player)
+    player.id = id
+    player.foes = {}
     return player
 
 
@@ -103,8 +104,8 @@ def test_kick_player_not_in_party(team_mm_service):
 
     team_mm_service.invite_player_to_party(sender, receiver)
 
-    with pytest.raises(ClientError):
-        team_mm_service.kick_player_from_party(sender, receiver)
+    team_mm_service.kick_player_from_party(sender, receiver)
+    sender.send_message.assert_called_once()
 
 
 def test_kick_player_not_owner(team_mm_service):
@@ -146,6 +147,74 @@ def test_leave_party_nonexistent(team_mm_service):
 
     with pytest.raises(ClientError):
         team_mm_service.leave_party(player)
+
+
+def test_ready_player(team_mm_service):
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
+
+    team_mm_service.invite_player_to_party(sender, receiver)
+
+    assert sender not in team_mm_service.player_parties[sender].members_ready
+    team_mm_service.ready_player(sender)
+    assert sender in team_mm_service.player_parties[sender].members_ready
+
+
+def test_ready_player_twice(team_mm_service):
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
+
+    team_mm_service.invite_player_to_party(sender, receiver)
+
+    assert sender not in team_mm_service.player_parties[sender].members_ready
+    team_mm_service.ready_player(sender)
+    assert sender in team_mm_service.player_parties[sender].members_ready
+    sender.send_message.assert_called_once()
+
+    team_mm_service.ready_player(sender)
+    sender.send_message.call_count == 2
+
+
+def test_ready_player_nonexistent(team_mm_service):
+    player = MockPlayer(id=1)
+
+    with pytest.raises(ClientError):
+        team_mm_service.ready_player(player)
+
+
+def test_unready_player(team_mm_service):
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
+
+    team_mm_service.invite_player_to_party(sender, receiver)
+    team_mm_service.ready_player(sender)
+
+    assert sender in team_mm_service.player_parties[sender].members_ready
+    team_mm_service.unready_player(sender)
+    assert sender not in team_mm_service.player_parties[sender].members_ready
+
+
+def test_unready_player_twice(team_mm_service):
+    sender = MockPlayer(id=1)
+    receiver = MockPlayer(id=2)
+
+    team_mm_service.invite_player_to_party(sender, receiver)
+    team_mm_service.ready_player(sender)
+
+    assert sender in team_mm_service.player_parties[sender].members_ready
+    team_mm_service.unready_player(sender)
+    assert sender not in team_mm_service.player_parties[sender].members_ready
+    assert sender.send_message.call_count == 2
+
+    team_mm_service.unready_player(sender)
+    assert sender.send_message.call_count == 3
+
+
+def test_unready_player_nonexistent(team_mm_service):
+    player = MockPlayer(id=1)
+
+    with pytest.raises(ClientError):
+        team_mm_service.unready_player(player)
 
 
 def test_player_disconnected(team_mm_service):

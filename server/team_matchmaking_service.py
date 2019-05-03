@@ -72,9 +72,12 @@ class TeamMatchmakingService:
             raise ClientError("You do not own that party.", recoverable=True)
 
         if kicked_player not in party.members:
-            raise ClientError("The kicked player is not in your party.", recoverable=True)
+            # Ensure client state is up to date
+            party.send_party(owner)
+            return
 
         party.remove_player(kicked_player)
+        kicked_player.send_message({"command": "kicked_from_party"})
 
     def leave_party(self, player: Player):
         if player not in self.player_parties:
@@ -84,6 +87,32 @@ class TeamMatchmakingService:
         self.player_parties.pop(player)
 
         self.remove_disbanded_parties()
+
+    def ready_player(self, player: Player):
+        if player not in self.player_parties:
+            raise ClientError("You are not in a party.", recoverable=True)
+
+        party = self.player_parties[player]
+
+        if player in party.members_ready:
+            # Ensure client state is up to date
+            party.send_party(player)
+            return
+
+        party.ready_player(player)
+
+    def unready_player(self, player: Player):
+        if player not in self.player_parties:
+            raise ClientError("You are not in a party.", recoverable=True)
+
+        party = self.player_parties[player]
+
+        if player not in party.members_ready:
+            # Ensure client state is up to date
+            party.send_party(player)
+            return
+
+        party.unready_player(player)
 
     def clear_invites(self):
         invites = filter(

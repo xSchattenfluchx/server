@@ -965,7 +965,16 @@ class LobbyConnection():
 
         self.team_matchmaking_service.kick_player_from_party(self.player, kicked_player)
 
+    @player_idle
+    async def command_ready_party(self, message):
+        self.team_matchmaking_service.ready_player(self.player)
+
+    async def command_unready_party(self, message):
+        # TODO: Cancel party search here if one exists
+        self.team_matchmaking_service.unready_player(self.player)
+
     async def command_leave_party(self, _message):
+        # TODO: Cancel party search here if one exists
         self.team_matchmaking_service.leave_party(self.player)
 
     def send_warning(self, message: str, fatal: bool=False):

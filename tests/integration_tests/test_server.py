@@ -1,10 +1,8 @@
-import pytest
 from server import VisibilityState
 from server.players import PlayerState
 
 from .conftest import (connect_and_sign_in, connect_client, perform_login,
                        read_until)
-from .testclient import ClientTest
 
 TEST_ADDRESS = ('127.0.0.1', None)
 
@@ -63,7 +61,6 @@ async def test_player_info_broadcast(loop, lobby_server):
     p2.close()
 
 
-@slow
 async def test_host_missing_fields(loop, lobby_server):
     player_id, session, proto = await connect_and_sign_in(
         ('test', 'test_password'),
@@ -88,7 +85,6 @@ async def test_host_missing_fields(loop, lobby_server):
     assert msg['featured_mod'] == 'faf'
 
 
-@slow
 async def test_old_client_error(loop, lobby_server):
     error_msg = {
         'command': 'notice',

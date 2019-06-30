@@ -56,7 +56,7 @@ class AuthenticationError(Exception):
         self.message = message
 
 
-from .team_matchmaking_service import TeamMatchmakingService
+from .party_service import PartyService
 
 
 @with_logger
@@ -69,7 +69,7 @@ class LobbyConnection():
         nts_client: Optional[TwilioNTS],
         geoip: GeoIpService,
         ladder_service: LadderService,
-        team_matchmaking_service: TeamMatchmakingService
+        party_service: PartyService
     ):
         self.geoip_service = geoip
         self.game_service = games
@@ -77,7 +77,7 @@ class LobbyConnection():
         self.nts_client = nts_client
         self.coturn_generator = CoturnHMAC()
         self.ladder_service = ladder_service
-        self.team_matchmaking_service = team_matchmaking_service
+        self.party_service = party_service
         self._authenticated = False
         self.player = None  # type: Player
         self.game_connection = None  # type: GameConnection
@@ -721,7 +721,7 @@ class LobbyConnection():
     async def command_game_matchmaking(self, message):
         mod = str(message.get('mod', 'ladder1v1'))
         state = str(message['state'])
-        party = self.team_matchmaking_service.get_party(self.player)
+        party = self.party_service.get_party(self.player)
 
         if state == "stop":
             self.ladder_service.cancel_search(self.player)
@@ -921,7 +921,7 @@ class LobbyConnection():
         if recipient is None:
             raise ClientError("The invited player doesn't exist", recoverable=True)
 
-        self.team_matchmaking_service.invite_player_to_party(self.player, recipient)
+        self.party_service.invite_player_to_party(self.player, recipient)
 
     @player_idle
     async def command_accept_party_invite(self, message):
@@ -929,7 +929,7 @@ class LobbyConnection():
         if sender is None:
             raise ClientError("The inviting player doesn't exist", recoverable=True)
 
-        self.team_matchmaking_service.accept_invite(self.player, sender)
+        self.party_service.accept_invite(self.player, sender)
 
     @player_idle
     async def command_kick_player_from_party(self, message):
@@ -937,19 +937,19 @@ class LobbyConnection():
         if kicked_player is None:
             raise ClientError("The kicked player doesn't exist", recoverable=True)
 
-        self.team_matchmaking_service.kick_player_from_party(self.player, kicked_player)
+        self.party_service.kick_player_from_party(self.player, kicked_player)
 
     @player_idle
     async def command_ready_party(self, message):
-        self.team_matchmaking_service.ready_player(self.player)
+        self.party_service.ready_player(self.player)
 
     async def command_unready_party(self, message):
         # TODO: Cancel party search here if one exists
-        self.team_matchmaking_service.unready_player(self.player)
+        self.party_service.unready_player(self.player)
 
     async def command_leave_party(self, _message):
         # TODO: Cancel party search here if one exists
-        self.team_matchmaking_service.leave_party(self.player)
+        self.party_service.leave_party(self.player)
 
     def send_warning(self, message: str, fatal: bool=False):
         """
@@ -999,4 +999,4 @@ class LobbyConnection():
         if self.player:
             self._logger.debug("Lost lobby connection removing player {}".format(self.player.id))
             self.player_service.remove_player(self.player)
-        self.team_matchmaking_service.on_player_disconnected(self.player)
+        self.party_service.on_player_disconnected(self.player)

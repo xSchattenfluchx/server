@@ -15,7 +15,7 @@ import socket
 
 import server
 import server.config as config
-from server import TeamMatchmakingService
+from server import PartyService
 from server.api.api_accessor import ApiAccessor
 from server.config import (DB_LOGIN, DB_NAME, DB_PASSWORD, DB_PORT, DB_SERVER,
                            TWILIO_ACCOUNT_SID)
@@ -88,8 +88,8 @@ if __name__ == '__main__':
         game_stats_service = GameStatsService(event_service, achievement_service)
 
         games = GameService(players_online, game_stats_service)
-        team_matchmaking_service = TeamMatchmakingService(games)
         ladder_service = LadderService(games)
+        party_service = PartyService(games)
 
         ctrl_server = loop.run_until_complete(server.run_control_server(loop, players_online, games))
 
@@ -100,7 +100,7 @@ if __name__ == '__main__':
             games=games,
             nts_client=twilio_nts,
             ladder_service=ladder_service,
-            team_matchmaking_service=team_matchmaking_service,
+            party_service=party_service,
             loop=loop,
         )
 

@@ -7,7 +7,7 @@ import pytest
 from server import GameService, PlayerService, run_lobby_server
 from server.ladder_service import LadderService
 from server.protocol import QDataStreamProtocol
-from server.team_matchmaking_service import TeamMatchmakingService
+from server.party_service import PartyService
 
 
 @pytest.fixture
@@ -35,7 +35,7 @@ def lobby_server(request, loop, player_service, game_service, geoip_service, lad
         player_service=player_service,
         games=game_service,
         ladder_service=ladder_service,
-        team_matchmaking_service=TeamMatchmakingService(game_service),
+        party_service=PartyService(game_service),
         nts_client=None,
         loop=loop
     )

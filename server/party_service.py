@@ -13,7 +13,7 @@ PARTY_INVITE_TIMEOUT = 60 * 60 * 24  # secs
 
 
 @with_logger
-class TeamMatchmakingService:
+class PartyService:
     """
     Service responsible for managing the global team matchmaking. Does grouping, matchmaking, updates statistics, and
     launches the games.

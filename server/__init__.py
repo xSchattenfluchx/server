@@ -25,7 +25,7 @@ from .player_service import PlayerService
 from .game_service import GameService
 from .ladder_service import LadderService
 from .control import init as run_control_server
-from .team_matchmaking_service import TeamMatchmakingService
+from .party_service import PartyService
 
 __version__ = '0.9.17'
 __author__ = 'Chris Kitching, Dragonfire, Gael Honorez, Jeroen De Dauw, Crotalus, Michael Søndergaard, Michel Jung'
@@ -39,7 +39,7 @@ __all__ = [
     'GameStatsService',
     'GameService',
     'LadderService',
-    'TeamMatchmakingService',
+    'PartyService',
     'run_lobby_server',
     'run_control_server',
     'games',
@@ -89,7 +89,7 @@ def run_lobby_server(
     nts_client: Optional[TwilioNTS],
     geoip_service: GeoIpService,
     ladder_service: LadderService,
-    team_matchmaking_service: TeamMatchmakingService
+    party_service: PartyService
 ) -> ServerContext:
     """
     Run the lobby server
@@ -145,7 +145,7 @@ def run_lobby_server(
             nts_client=nts_client,
             players=player_service,
             ladder_service=ladder_service,
-            team_matchmaking_service=team_matchmaking_service
+            party_service=party_service
         )
     ctx = ServerContext(make_connection, name="LobbyServer")
     loop.call_later(DIRTY_REPORT_INTERVAL, report_dirties)

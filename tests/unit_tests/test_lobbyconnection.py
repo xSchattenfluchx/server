@@ -14,7 +14,7 @@ from server.lobbyconnection import ClientError, LobbyConnection
 from server.player_service import PlayerService
 from server.players import Player, PlayerState
 from server.protocol import QDataStreamProtocol
-from server.team_matchmaking_service import TeamMatchmakingService
+from server.party_service import PartyService
 from server.types import Address
 from sqlalchemy import and_, select
 from tests import CoroMock
@@ -86,7 +86,7 @@ def lobbyconnection(loop, mock_protocol, mock_games, mock_players, mock_player, 
         players=mock_players,
         nts_client=mock_nts_client,
         ladder_service=mock.create_autospec(LadderService),
-        team_matchmaking_service=mock.create_autospec(TeamMatchmakingService)
+        party_service=mock.create_autospec(PartyService)
     )
 
     lc.player = mock_player
@@ -669,7 +669,7 @@ async def test_command_invite_to_party(lobbyconnection, mock_player):
         'recipient_id': 1
     })
 
-    lobbyconnection.team_matchmaking_service.invite_player_to_party.assert_called_once()
+    lobbyconnection.party_service.invite_player_to_party.assert_called_once()
 
 
 async def test_command_accept_party_invite(lobbyconnection, mock_player):
@@ -682,7 +682,7 @@ async def test_command_accept_party_invite(lobbyconnection, mock_player):
         'sender_id': 1
     })
 
-    lobbyconnection.team_matchmaking_service.accept_invite.assert_called_once()
+    lobbyconnection.party_service.accept_invite.assert_called_once()
 
 
 async def test_command_kick_player_from_party(lobbyconnection, mock_player):
@@ -695,7 +695,7 @@ async def test_command_kick_player_from_party(lobbyconnection, mock_player):
         'kicked_player_id': 1
     })
 
-    lobbyconnection.team_matchmaking_service.kick_player_from_party.assert_called_once()
+    lobbyconnection.party_service.kick_player_from_party.assert_called_once()
 
 
 async def test_command_leave_party(lobbyconnection, mock_player):
@@ -707,7 +707,7 @@ async def test_command_leave_party(lobbyconnection, mock_player):
         'command': 'leave_party'
     })
 
-    lobbyconnection.team_matchmaking_service.leave_party.assert_called_once()
+    lobbyconnection.party_service.leave_party.assert_called_once()
 
 
 async def test_command_game_matchmaking(lobbyconnection, mock_player, db_engine):

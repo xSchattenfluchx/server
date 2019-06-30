@@ -2,6 +2,7 @@ import gc
 from unittest import mock
 
 from server.factions import Faction
+from server.lobbyconnection import LobbyConnection
 from server.players import Player
 from trueskill import Rating
 
@@ -73,3 +74,15 @@ def test_serialize():
                     "number_of_games": 542,
                     "clan": 'TOAST'
     }
+
+
+def test_send_message():
+    p = Player()
+    lobby_connection = mock.create_autospec(LobbyConnection)
+
+    # When no lobbyconnection this hsould be a noop
+    p.send_message({})
+    p.lobby_connection = lobby_connection
+    p.send_message({})
+
+    lobby_connection.send.assert_called_once_with(({}))

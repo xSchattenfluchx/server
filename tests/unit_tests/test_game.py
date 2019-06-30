@@ -4,7 +4,6 @@ from typing import Any, List, Tuple
 from unittest import mock
 
 import pytest
-from mock import patch
 from server.gameconnection import GameConnection, GameConnectionState
 from server.games import CoopGame, CustomGame
 from server.games.game import (Game, GameError, GameOutcome, GameState,
@@ -313,15 +312,6 @@ async def test_invalid_army_not_add_result(game: Game, players):
     assert 99 not in game._results
 
 
-async def test_initialized_game_not_allowed_to_end(game: Game):
-    await game.clear_data()
-    game.state = GameState.INITIALIZING
-
-    game.on_game_end()
-
-    assert game.state is GameState.INITIALIZING
-
-
 async def test_game_ends_in_mutually_agreed_draw(game: Game):
     game.state = GameState.LOBBY
     players = add_players(game, 2)
@@ -507,7 +497,6 @@ async def test_to_dict(game, create_player):
         "title": game.sanitize_name(game.name),
         "state": 'playing',
         "featured_mod": game.game_mode,
-        "featured_mod_versions": game.getGamemodVersion(),
         "sim_mods": game.mods,
         "mapname": game.map_folder_name,
         "map_file_path": game.map_file_path,

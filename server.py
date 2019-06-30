@@ -17,18 +17,23 @@ import server
 import server.config as config
 from server import TeamMatchmakingService
 from server.api.api_accessor import ApiAccessor
-from server.config import DB_SERVER, DB_PORT, DB_LOGIN, DB_PASSWORD, DB_NAME, TWILIO_ACCOUNT_SID
+from server.config import (DB_LOGIN, DB_NAME, DB_PASSWORD, DB_PORT, DB_SERVER,
+                           TWILIO_ACCOUNT_SID)
 from server.game_service import GameService
 from server.geoip_service import GeoIpService
-from server.matchmaker import MatchmakerQueue
-from server.player_service import PlayerService
-from server.stats.game_stats_service import GameStatsService, EventService, AchievementService
 from server.ice_servers.nts import TwilioNTS
+from server.ladder_service import LadderService
+from server.player_service import PlayerService
+from server.stats.game_stats_service import (AchievementService, EventService,
+                                             GameStatsService)
 
 if __name__ == '__main__':
     logger = logging.getLogger()
     stderr_handler = logging.StreamHandler()
-    stderr_handler.setFormatter(logging.Formatter('%(levelname)-8s %(name)-30s %(message)s'))
+    stderr_handler.setFormatter(logging.Formatter(
+        fmt='%(levelname)-8s %(asctime)s %(name)-30s %(message)s',
+        datefmt='%b %d  %H:%M:%S'
+    ))
     logger.addHandler(stderr_handler)
     logger.setLevel(config.LOG_LEVEL)
 
@@ -84,6 +89,7 @@ if __name__ == '__main__':
 
         games = GameService(players_online, game_stats_service)
         team_matchmaking_service = TeamMatchmakingService(games)
+        ladder_service = LadderService(games)
 
         ctrl_server = loop.run_until_complete(server.run_control_server(loop, players_online, games))
 
@@ -93,9 +99,9 @@ if __name__ == '__main__':
             player_service=players_online,
             games=games,
             nts_client=twilio_nts,
-            matchmaker_queue=MatchmakerQueue('ladder1v1', game_service=games),
+            ladder_service=ladder_service,
+            team_matchmaking_service=team_matchmaking_service,
             loop=loop,
-            team_matchmaking_service=team_matchmaking_service
         )
 
         for sock in lobby_server.sockets:
@@ -103,6 +109,7 @@ if __name__ == '__main__':
 
         loop.run_until_complete(done)
         players_online.broadcast_shutdown()
+        ladder_service.shutdown_queues()
 
         # Close DB connections
         engine.close()

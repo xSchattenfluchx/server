@@ -9,7 +9,7 @@ import urllib.request
 from functools import wraps
 from typing import Optional
 
-import requests
+import aiohttp
 
 import humanize
 import pymysql
@@ -29,11 +29,12 @@ from .games import GameState, VisibilityState
 from .geoip_service import GeoIpService
 from .ice_servers.coturn import CoturnHMAC
 from .ice_servers.nts import TwilioNTS
-from .matchmaker import MatchmakerQueue, Search
+from .matchmaker import Search
 from .player_service import PlayerService
 from .players import Player, PlayerState
 from .protocol import QDataStreamProtocol
 from .types import Address
+from .ladder_service import LadderService
 
 
 class ClientError(Exception):
@@ -67,7 +68,7 @@ class LobbyConnection():
         players: PlayerService,
         nts_client: Optional[TwilioNTS],
         geoip: GeoIpService,
-        matchmaker_queue: MatchmakerQueue,
+        ladder_service: LadderService,
         team_matchmaking_service: TeamMatchmakingService
     ):
         self.geoip_service = geoip
@@ -75,7 +76,7 @@ class LobbyConnection():
         self.player_service = players
         self.nts_client = nts_client
         self.coturn_generator = CoturnHMAC()
-        self.matchmaker_queue = matchmaker_queue
+        self.ladder_service = ladder_service
         self.team_matchmaking_service = team_matchmaking_service
         self._authenticated = False
         self.player = None  # type: Player
@@ -83,7 +84,6 @@ class LobbyConnection():
         self.peer_address = None  # type: Optional[Address]
         self.session = int(random.randrange(0, 4294967295))
         self.protocol = None
-        self.search = None
         self.user_agent = None
 
         self._attempted_connectivity_test = False
@@ -135,6 +135,7 @@ class LobbyConnection():
             if target == 'game':
                 if not self.game_connection:
                     return
+
                 await self.game_connection.handle_action(cmd, message.get('args', []))
                 return
 
@@ -154,6 +155,7 @@ class LobbyConnection():
                  'text': ex.message}
             )
         except ClientError as ex:
+            self._logger.warning("Client error: %s", ex.message)
             self.protocol.send_message(
                 {'command': 'notice',
                  'style': 'error',
@@ -295,7 +297,7 @@ class LobbyConnection():
                                     ban_fail = row[0]
                                 else:
                                     if period not in ["DAY", "WEEK", "MONTH"]:
-                                        self._logger.warn('Tried to ban player with invalid period')
+                                        self._logger.warning('Tried to ban player with invalid period')
                                         raise ClientError(f"Period '{period}' is not allowed!")
 
                                     # NOTE: Text formatting in sql string is only ok because we just checked it's value
@@ -323,45 +325,6 @@ class LobbyConnection():
                                   rule_link=config.RULE_LINK)))
                     if ban_fail:
                         raise ClientError("Kicked the player, but he was already banned!")
-
-            elif action == "requestavatars":
-                async with db.engine.acquire() as conn:
-                    result = await conn.execute("SELECT url, tooltip FROM `avatars_list`")
-
-                    data = {"command": "admin", "avatarlist": []}
-                    async for row in result:
-                        data['avatarlist'].append({
-                            "url": row["url"],
-                            "tooltip": row["tooltip"]
-                        })
-
-                    self.sendJSON(data)
-
-            elif action == "remove_avatar":
-                idavatar = message["idavatar"]
-                iduser = message["iduser"]
-                async with db.engine.acquire() as conn:
-                    await conn.execute("DELETE FROM `avatars` "
-                                              "WHERE `idUser` = %s "
-                                              "AND `idAvatar` = %s", (iduser, idavatar))
-
-            elif action == "add_avatar":
-                who = message['user']
-                avatar = message['avatar']
-
-                async with db.engine.acquire() as conn:
-                    if avatar is None:
-                        await conn.execute(
-                            "DELETE FROM `avatars` "
-                            "WHERE `idUser` = "
-                            "(SELECT `id` FROM `login` WHERE `login`.`login` = %s)", (who, ))
-                    else:
-                        await conn.execute(
-                            "INSERT INTO `avatars`(`idUser`, `idAvatar`) "
-                            "VALUES ((SELECT id FROM login WHERE login.login = %s),"
-                            "(SELECT id FROM avatars_list WHERE avatars_list.url = %s)) "
-                            "ON DUPLICATE KEY UPDATE `idAvatar` = (SELECT id FROM avatars_list WHERE avatars_list.url = %s)",
-                            (who, avatar, avatar))
 
             elif action == "broadcast":
                 for player in self.player_service:
@@ -426,14 +389,25 @@ class LobbyConnection():
 
     def check_version(self, message):
         versionDB, updateFile = self.player_service.client_version_info
-        update_msg = dict(command="update",
-                          update=updateFile,
-                          new_version=versionDB)
+        update_msg = {
+            'command': 'update',
+            'update': updateFile,
+            'new_version': versionDB
+        }
 
         self.user_agent = message.get('user_agent')
         version = message.get('version')
         server.stats.gauge('user.agents.None', -1, delta=True)
         server.stats.gauge('user.agents.{}'.format(self.user_agent), 1, delta=True)
+
+        if not self.user_agent or 'downlords-faf-client' not in self.user_agent:
+            self.send_warning(
+                "You are using an unofficial client version! "
+                "Some features might not work as expected. "
+                "If you experience any problems please download the latest "
+                "version of the official client from "
+                f'<a href="{config.WWW_URL}">{config.WWW_URL}</a>'
+            )
 
         if not version or not self.user_agent:
             update_msg['command'] = 'welcome'
@@ -464,7 +438,9 @@ class LobbyConnection():
             'cache-control': "no-cache"
         }
 
-        response = requests.post(url, json=payload, headers=headers).json()
+        async with aiohttp.ClientSession(raise_for_status=True) as session:
+            async with session.post(url, json=payload, headers=headers) as resp:
+                response = await resp.json()
 
         if response.get('result', '') == 'vm':
             self._logger.debug("Using VM: %d: %s", player_id, uid_hash)
@@ -493,7 +469,7 @@ class LobbyConnection():
                               "a false positive.",
                               fatal=True)
 
-            with await db.engine.acquire() as conn:
+            async with await db.engine.acquire() as conn:
                 try:
                     await conn.execute(
                         "INSERT INTO ban (player_id, author_id, reason, level) VALUES (%s, %s, %s, 'GLOBAL')",
@@ -676,7 +652,7 @@ class LobbyConnection():
                     avatar = {"url": row["url"], "tooltip": row["tooltip"]}
                     avatarList.append(avatar)
 
-                if len(avatarList) > 0:
+                if avatarList:
                     self.sendJSON({"command": "avatar", "avatarlist": avatarList})
 
         elif action == "select":
@@ -743,14 +719,12 @@ class LobbyConnection():
     @ice_only
     @player_idle
     async def command_game_matchmaking(self, message):
-        mod = message.get('mod', 'ladder1v1')
-        state = message['state']
+        mod = str(message.get('mod', 'ladder1v1'))
+        state = str(message['state'])
         party = self.team_matchmaking_service.get_party(self.player)
 
         if state == "stop":
-            if self.search:
-                self._logger.info("%s stopped searching for ladder: %s", self.player, self.search)
-                self.search.cancel()
+            self.ladder_service.cancel_search(self.player)
             return
 
         if party is not None:
@@ -774,18 +748,18 @@ class LobbyConnection():
                                    text="You are banned from the matchmaker. Contact an admin to have the reason."))
                 return
 
-        if mod == "ladder1v1":
-            if state == "start":
-                if self.search:
-                    self.search.cancel()
-                assert self.player is not None
-                self.player.faction = message['faction']
-                self.search = Search(self.player)
+        if state == "start":
+            assert self.player is not None
+            # Faction can be either the name (e.g. 'uef') or the enum value (e.g. 1)
+            self.player.faction = message['faction']
 
-                self.game_service.ladder_service.inform_player(self.player)
+            if mod == "ladder1v1":
+                search = Search([self.player])
+            else:
+                # TODO: Put player parties here
+                search = Search([self.player])
 
-                self._logger.info("%s is searching for ladder: %s", self.player, self.search)
-                asyncio.ensure_future(self.matchmaker_queue.search(self.search))
+            self.ladder_service.start_search(self.player, search, queue_name=mod)
 
     def command_coop_list(self, message):
         """ Request for coop map list"""
@@ -887,7 +861,7 @@ class LobbyConnection():
                 uid, name, version, author, ui, date, downloads, likes, played, description, filename, icon, likerList = (row[i] for i in range(13))
                 link = urllib.parse.urljoin(config.CONTENT_URL, "faf/vault/" + filename)
                 thumbstr = ""
-                if icon != "":
+                if icon:
                     thumbstr = urllib.parse.urljoin(config.CONTENT_URL, "faf/vault/mods_thumbs/" + urllib.parse.quote(icon))
 
                 out = dict(command="modvault_info", thumbnail=thumbstr, link=link, bugreports=[],
@@ -1019,8 +993,9 @@ class LobbyConnection():
             self._logger.debug(
                 "Lost lobby connection killing game connection for player {}".format(self.game_connection.player.id))
             await self.game_connection.on_connection_lost()
-        if self.search and not self.search.done():
-            self.search.cancel()
+
+        self.ladder_service.on_connection_lost(self.player)
+
         if self.player:
             self._logger.debug("Lost lobby connection removing player {}".format(self.player.id))
             self.player_service.remove_player(self.player)

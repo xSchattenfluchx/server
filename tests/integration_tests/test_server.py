@@ -2,9 +2,26 @@ from server import VisibilityState
 from server.players import PlayerState
 
 from .conftest import (connect_and_sign_in, connect_client, perform_login,
-                       read_until)
+                       read_until, read_until_command)
 
 TEST_ADDRESS = ('127.0.0.1', None)
+
+
+async def test_server_deprecated_client(lobby_server):
+    proto = await connect_client(lobby_server)
+
+    proto.send_message({'command': 'ask_session', 'user_agent': 'faf-client', 'version': '0.0.0'})
+    await proto.drain()
+    msg = await proto.read_message()
+
+    assert msg['command'] == 'notice'
+
+    proto = await connect_client(lobby_server)
+    proto.send_message({'command': 'ask_session', 'version': '0.0.0'})
+    await proto.drain()
+    msg = await proto.read_message()
+
+    assert msg['command'] == 'notice'
 
 
 async def test_server_invalid_login(loop, lobby_server):
@@ -43,6 +60,31 @@ async def test_server_valid_login(loop, lobby_server):
                    'login': 'test'}
     lobby_server.close()
     proto.close()
+    await lobby_server.wait_closed()
+
+
+async def test_server_double_login(loop, lobby_server):
+    proto = await connect_client(lobby_server)
+    await perform_login(proto, ('test', 'test_password'))
+    msg = await proto.read_message()
+    msg['command'] == 'welcome'
+
+    # Sign in again with a new protocol object
+    proto2 = await connect_client(lobby_server)
+    await perform_login(proto2, ('test', 'test_password'))
+    msg = await proto2.read_message()
+    msg['command'] == 'welcome'
+
+    msg = await read_until_command(proto, 'notice')
+    assert msg == {
+        'command': 'notice',
+        'style': 'error',
+        'text': 'You have been signed out because you signed in elsewhere.'
+    }
+
+    lobby_server.close()
+    proto.close()
+    proto2.close()
     await lobby_server.wait_closed()
 
 

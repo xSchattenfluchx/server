@@ -1,17 +1,18 @@
 import asyncio
-from collections import defaultdict
 
 import server.db as db
-from sqlalchemy import text
+from sqlalchemy import text, select
 
 from .abc.base_game import GameConnectionState
-from .decorators import timed, with_logger
+from .config import TRACE
+from .decorators import with_logger
 from .game_service import GameService
 from .games.game import Game, GameState, ValidityState, Victory
 from .player_service import PlayerService
 from .players import Player, PlayerState
 from .protocol import GpgNetServerProtocol, QDataStreamProtocol
 
+from .db.models import (reported_user, moderation_report, login)
 
 class AuthenticationError(Exception):
     pass
@@ -40,7 +41,6 @@ class GameConnection(GpgNetServerProtocol):
 
         self.protocol = protocol
         self._state = state
-        self._waiters = defaultdict(list)
         self.game_service = games
         self.player_service = player_service
 
@@ -73,7 +73,7 @@ class GameConnection(GpgNetServerProtocol):
     def send_message(self, message):
         message['target'] = "game"
 
-        self._logger.debug(">>: %s", message)
+        self._logger.log(TRACE, ">>: %s", message)
         self.protocol.send_message(message)
 
     async def _handle_idle_state(self):
@@ -92,7 +92,7 @@ class GameConnection(GpgNetServerProtocol):
         elif state == PlayerState.JOINING:
             pass
         else:
-            self._logger.exception("Unknown PlayerState")
+            self._logger.exception("Unknown PlayerState: %s", state)
             self.abort()
 
     async def _handle_lobby_state(self):
@@ -106,6 +106,7 @@ class GameConnection(GpgNetServerProtocol):
             player_state = self.player.state
             if player_state == PlayerState.HOSTING:
                 self.send_HostGame(self.game.map_folder_name)
+                self.game.set_hosted()
             # If the player is joining, we connect him to host
             # followed by the rest of the players.
             elif player_state == PlayerState.JOINING:
@@ -122,23 +123,6 @@ class GameConnection(GpgNetServerProtocol):
                         asyncio.ensure_future(self.connect_to_peer(peer))
         except Exception as e:  # pragma: no cover
             self._logger.exception(e)
-
-    @timed(limit=0.1)
-    async def on_message_received(self, message):
-        """
-        Main entry point when reading messages
-        :param message:
-        :return:
-        """
-        try:
-            cmd_id, args = message['command'], message['args']
-            await self.handle_action(cmd_id, args)
-            if cmd_id in self._waiters:
-                for waiter in self._waiters[cmd_id]:
-                    waiter.set_result(message)
-                    self._waiters[cmd_id].remove(waiter)
-        except ValueError as ex:  # pragma: no cover
-            self._logger.error("Garbage command %s %s", ex, message)
 
     async def connect_to_host(self, peer: "GameConnection"):
         """
@@ -172,7 +156,6 @@ class GameConnection(GpgNetServerProtocol):
         :param args: command arguments
         :return: None
         """
-
         try:
             await COMMAND_HANDLERS[command](self, *args)
         except KeyError:
@@ -314,14 +297,93 @@ class GameConnection(GpgNetServerProtocol):
     async def handle_enforce_rating(self):
         self.game.enforce_rating = True
 
-    async def handle_teamkill_report(self, gametime, victim_id, victim_name, teamkiller_id, teamkiller_name):
+    async def handle_teamkill_report(self, gametime, reporter_id, reporter_name, teamkiller_id, teamkiller_name):
         """
+            Sent when a player is teamkilled and clicks the 'Report' button.
+
+            :param gametime: seconds of gametime when kill happened
+            :param reporter_id: reporter id
+            :param reporter_name: reporter nickname
+            :param teamkiller_id: teamkiller id
+            :param teamkiller_name: teamkiller nickname - Used as a failsafe in case ID is wrong
+        """
+                
+        async with db.engine.acquire() as conn:
+
+            """
+                Sometime the game sends a wrong ID - but a correct player name
+                We need to make sure the player ID is correct before pursuing
+            """
+
+            check = await conn.execute(select([login.c.id]).where(
+                login.c.id == teamkiller_id or
+                login.c.login == teamkiller_name
+            ))
+
+            row = await check.fetchone()
+            if not row:
+                self._logger.debug("Discarded teamkill report with unknown reported player %s[%s]",
+                                   teamkiller_id,
+                                   teamkiller_name
+                )
+                return
+
+            verified_teamkiller_id = row[login.c.id]
+
+            """
+                The reporter's ID also needs to be checked the exact same way
+                for the same reasons
+            """
+
+            check = await conn.execute(select([login.c.id]).where(
+                login.c.id == reporter_id or
+                login.c.login == reporter_name
+            ))
+
+            row = await check.fetchone()
+            if not row:
+                self._logger.debug("Discarded teamkill report with unknown reporter %s[%s]",
+                                   reporter_id,
+                                   reporter_name
+                                   )
+                return
+
+            verified_reporter_id = row[login.c.id]
+
+            insert = moderation_report.insert().values(
+                reporter_id=verified_reporter_id,
+                game_id=self.game.id,
+                game_incident_timecode=gametime,
+                report_description=f"Auto-generated teamkill report from {reporter_name}",
+            )
+            
+            result = await conn.execute(insert)
+            
+            await conn.execute(
+                reported_user.insert().values(
+                    player_id=verified_teamkiller_id,
+                    report_id=result.lastrowid
+                )
+            )
+            
+
+    async def handle_teamkill_happened(self, gametime, victim_id, victim_name, teamkiller_id, teamkiller_name):
+        """
+            Send automatically by the game whenever a teamkill happens. Takes
+            the same parameters as TeamkillReport.
+
             :param gametime: seconds of gametime when kill happened
             :param victim_id: victim id
             :param victim_name: victim nickname (for debug purpose only)
             :param teamkiller_id: teamkiller id
             :param teamkiller_name: teamkiller nickname (for debug purpose only)
         """
+        victim_id = int(victim_id)
+        teamkiller_id = int(teamkiller_id)
+
+        if 0 in (victim_id, teamkiller_id):
+            self._logger.debug("Ignoring teamkill for AI player")
+            return
 
         async with db.engine.acquire() as conn:
             await conn.execute(
@@ -504,6 +566,7 @@ COMMAND_HANDLERS = {
     "JsonStats":            GameConnection.handle_json_stats,
     "EnforceRating":        GameConnection.handle_enforce_rating,
     "TeamkillReport":       GameConnection.handle_teamkill_report,
+    "TeamkillHappened":     GameConnection.handle_teamkill_happened,
     "GameEnded":            GameConnection.handle_game_ended,
     "Rehost":               GameConnection.handle_rehost,
     "Bottleneck":           GameConnection.handle_bottleneck,

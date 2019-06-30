@@ -25,7 +25,6 @@ from .player_service import PlayerService
 from .game_service import GameService
 from .ladder_service import LadderService
 from .control import init as run_control_server
-from .matchmaker import MatchmakerQueue
 from .team_matchmaking_service import TeamMatchmakingService
 
 __version__ = '0.9.17'
@@ -89,7 +88,7 @@ def run_lobby_server(
     loop,
     nts_client: Optional[TwilioNTS],
     geoip_service: GeoIpService,
-    matchmaker_queue: MatchmakerQueue,
+    ladder_service: LadderService,
     team_matchmaking_service: TeamMatchmakingService
 ) -> ServerContext:
     """
@@ -145,7 +144,7 @@ def run_lobby_server(
             games=games,
             nts_client=nts_client,
             players=player_service,
-            matchmaker_queue=matchmaker_queue,
+            ladder_service=ladder_service,
             team_matchmaking_service=team_matchmaking_service
         )
     ctx = ServerContext(make_connection, name="LobbyServer")

@@ -1,15 +1,16 @@
-import asyncio
 from unittest import mock
 from unittest.mock import Mock
 
 import pytest
+from aiohttp import web
 from server import GameState, VisibilityState
 from server.db.models import ban, friends_and_foes
 from server.game_service import GameService
 from server.games import CustomGame, Game
 from server.geoip_service import GeoIpService
 from server.ice_servers.nts import TwilioNTS
-from server.lobbyconnection import LobbyConnection
+from server.ladder_service import LadderService
+from server.lobbyconnection import ClientError, LobbyConnection
 from server.player_service import PlayerService
 from server.players import Player, PlayerState
 from server.protocol import QDataStreamProtocol
@@ -84,7 +85,7 @@ def lobbyconnection(loop, mock_protocol, mock_games, mock_players, mock_player, 
         games=mock_games,
         players=mock_players,
         nts_client=mock_nts_client,
-        matchmaker_queue=mock.Mock(),
+        ladder_service=mock.create_autospec(LadderService),
         team_matchmaking_service=mock.create_autospec(TeamMatchmakingService)
     )
 
@@ -96,8 +97,36 @@ def lobbyconnection(loop, mock_protocol, mock_games, mock_players, mock_player, 
     return lc
 
 
+@pytest.fixture
+def policy_server(loop):
+    host = 'localhost'
+    port = 6080
+
+    app = web.Application()
+    routes = web.RouteTableDef()
+
+    @routes.post('/verify')
+    async def token(request):
+        data = await request.json()
+        return web.json_response({'result': data.get('uid_hash')})
+
+    app.add_routes(routes)
+
+    runner = web.AppRunner(app)
+
+    async def start_app():
+        await runner.setup()
+        site = web.TCPSite(runner, host, port)
+        await site.start()
+
+    loop.run_until_complete(start_app())
+    yield (host, port)
+    loop.run_until_complete(runner.cleanup())
+
+
 async def test_command_game_host_creates_game(
-        lobbyconnection, mock_games, test_game_info, players):
+    lobbyconnection, mock_games, test_game_info, players
+):
     lobbyconnection.player = players.hosting
     players.hosting.in_game = False
     players.hosting.state = PlayerState.IDLE
@@ -281,7 +310,6 @@ async def test_send_coop_maps(mocker, lobbyconnection):
     await lobbyconnection.send_coop_maps()
 
     args = protocol.send_messages.call_args_list
-    print(args)
     assert len(args) == 1
     coop_maps = args[0][0][0]
     for info in coop_maps:
@@ -330,8 +358,7 @@ async def test_send_coop_maps(mocker, lobbyconnection):
     ]
 
 
-@asyncio.coroutine
-def test_command_admin_closelobby(mocker, lobbyconnection):
+async def test_command_admin_closelobby(mocker, lobbyconnection):
     mocker.patch.object(lobbyconnection, 'protocol')
     mocker.patch.object(lobbyconnection, '_logger')
     config = mocker.patch('server.lobbyconnection.config')
@@ -342,7 +369,7 @@ def test_command_admin_closelobby(mocker, lobbyconnection):
     tuna.id = 55
     lobbyconnection.player_service = {1: player, 55: tuna}
 
-    yield from lobbyconnection.command_admin({
+    await lobbyconnection.command_admin({
         'command': 'admin',
         'action': 'closelobby',
         'user_id': 55
@@ -428,19 +455,20 @@ async def test_command_admin_closelobby_with_ban_bad_period(mocker, lobbyconnect
     assert len(bans) == 0
 
 
-@asyncio.coroutine
-def test_command_admin_closeFA(mocker, lobbyconnection):
+async def test_command_admin_closeFA(mocker, lobbyconnection):
     mocker.patch.object(lobbyconnection, 'protocol')
     mocker.patch.object(lobbyconnection, '_logger')
     config = mocker.patch('server.lobbyconnection.config')
     player = mocker.patch.object(lobbyconnection, 'player')
     player.login = 'Sheeo'
+    player.admin = True
     player.id = 42
     tuna = mock.Mock()
     tuna.id = 55
+    lobbyconnection._authenticated = True
     lobbyconnection.player_service = {42: player, 55: tuna}
 
-    yield from lobbyconnection.command_admin({
+    await lobbyconnection.on_message_received({
         'command': 'admin',
         'action': 'closeFA',
         'user_id': 55
@@ -680,3 +708,73 @@ async def test_command_leave_party(lobbyconnection, mock_player):
     })
 
     lobbyconnection.team_matchmaking_service.leave_party.assert_called_once()
+
+
+async def test_command_game_matchmaking(lobbyconnection, mock_player, db_engine):
+    lobbyconnection.player = mock_player
+    lobbyconnection.player.id = 1
+    lobbyconnection._authenticated = True
+
+    await lobbyconnection.on_message_received({
+        'command': 'game_matchmaking',
+        'state': 'stop'
+    })
+
+    lobbyconnection.ladder_service.cancel_search.assert_called_with(lobbyconnection.player)
+
+
+async def test_connection_lost(lobbyconnection):
+    await lobbyconnection.on_connection_lost()
+
+    lobbyconnection.ladder_service.on_connection_lost.assert_called_once_with(lobbyconnection.player)
+    lobbyconnection.player_service.remove_player.assert_called_once_with(lobbyconnection.player)
+
+
+async def test_check_policy_conformity(lobbyconnection, policy_server):
+    host, port = policy_server
+    with mock.patch(
+        'server.lobbyconnection.FAF_POLICY_SERVER_BASE_URL',
+        f'http://{host}:{port}'
+    ):
+        honest = await lobbyconnection.check_policy_conformity(1, "honest", session=100)
+        assert honest is True
+
+
+async def test_check_policy_conformity_fraudulent(lobbyconnection, policy_server, db_engine):
+    host, port = policy_server
+    with mock.patch(
+        'server.lobbyconnection.FAF_POLICY_SERVER_BASE_URL',
+        f'http://{host}:{port}'
+    ):
+        # 42 is not a valid player ID which should cause a SQL constraint error
+        lobbyconnection.abort = mock.Mock()
+        with pytest.raises(ClientError):
+            await lobbyconnection.check_policy_conformity(42, "fraudulent", session=100)
+
+        lobbyconnection.abort = mock.Mock()
+        player_id = 200
+        honest = await lobbyconnection.check_policy_conformity(player_id, "fraudulent", session=100)
+        assert honest is False
+        lobbyconnection.abort.assert_called_once()
+
+        # Check that the user has a ban entry in the database
+        async with db_engine.acquire() as conn:
+            result = await conn.execute(select([ban.c.reason]).where(
+                ban.c.player_id == player_id
+            ))
+            rows = await result.fetchall()
+            assert rows is not None
+            assert rows[-1][ban.c.reason] == "Auto-banned because of fraudulent login attempt"
+
+
+async def test_check_policy_conformity_fatal(lobbyconnection, policy_server):
+    host, port = policy_server
+    with mock.patch(
+        'server.lobbyconnection.FAF_POLICY_SERVER_BASE_URL',
+        f'http://{host}:{port}'
+    ):
+        for result in ('vm', 'already_associated', 'fraudulent'):
+            lobbyconnection.abort = mock.Mock()
+            honest = await lobbyconnection.check_policy_conformity(1, result, session=100)
+            assert honest is False
+            lobbyconnection.abort.assert_called_once()

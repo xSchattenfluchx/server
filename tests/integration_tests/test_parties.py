@@ -1,6 +1,6 @@
 from server.players import PlayerState
 
-from .conftest import connect_and_sign_in, read_until
+from .conftest import connect_and_sign_in, read_until_command
 
 
 async def test_invite_party_workflow(loop, lobby_server):
@@ -20,15 +20,15 @@ async def test_invite_party_workflow(loop, lobby_server):
         ('rhiza', 'puff_the_magic_dragon'), lobby_server
     )
 
-    await read_until(proto, lambda msg: msg['command'] == 'game_info')
-    await read_until(proto2, lambda msg: msg['command'] == 'game_info')
+    await read_until_command(proto, 'game_info')
+    await read_until_command(proto2, 'game_info')
 
     proto.send_message({
         'command': 'invite_to_party',
         'recipient_id': rhiza_id,
     })
 
-    msg = await read_until(proto2, lambda msg: msg['command'] == 'party_invite')
+    msg = await read_until_command(proto2, 'party_invite')
     assert msg == {'command': 'party_invite', 'sender': test_id}
 
     proto2.send_message({
@@ -36,8 +36,8 @@ async def test_invite_party_workflow(loop, lobby_server):
         'sender_id': test_id,
     })
 
-    msg1 = await read_until(proto, lambda msg: msg['command'] == 'update_party')
-    msg2 = await read_until(proto2, lambda msg: msg['command'] == 'update_party')
+    msg1 = await read_until_command(proto, 'update_party')
+    msg2 = await read_until_command(proto2, 'update_party')
     assert msg1 == msg2
     assert msg1 == {
         'command': 'update_party',
@@ -48,8 +48,8 @@ async def test_invite_party_workflow(loop, lobby_server):
 
     proto2.send_message({'command': 'ready_party'})
 
-    msg1 = await read_until(proto, lambda msg: msg['command'] == 'update_party')
-    msg2 = await read_until(proto2, lambda msg: msg['command'] == 'update_party')
+    msg1 = await read_until_command(proto, 'update_party')
+    msg2 = await read_until_command(proto2, 'update_party')
     assert msg1 == msg2
     assert msg1 == {
         'command': 'update_party',
@@ -60,8 +60,8 @@ async def test_invite_party_workflow(loop, lobby_server):
 
     proto2.send_message({'command': 'unready_party'})
 
-    msg1 = await read_until(proto, lambda msg: msg['command'] == 'update_party')
-    msg2 = await read_until(proto2, lambda msg: msg['command'] == 'update_party')
+    msg1 = await read_until_command(proto, 'update_party')
+    msg2 = await read_until_command(proto2, 'update_party')
     assert msg1 == msg2
     assert msg1 == {
         'command': 'update_party',
@@ -75,8 +75,8 @@ async def test_invite_party_workflow(loop, lobby_server):
         'kicked_player_id': rhiza_id,
     })
 
-    msg1 = await read_until(proto, lambda msg: msg['command'] == 'update_party')
-    msg2 = await read_until(proto2, lambda msg: msg['command'] == 'update_party')
+    msg1 = await read_until_command(proto, 'update_party')
+    msg2 = await read_until_command(proto2, 'update_party')
     assert msg1 == msg2
     assert msg1 == {
         'command': 'update_party',
@@ -87,7 +87,7 @@ async def test_invite_party_workflow(loop, lobby_server):
 
     proto.send_message({'command': 'leave_party'})
 
-    msg = await read_until(proto, lambda msg: msg['command'] == 'update_party')
+    msg = await read_until_command(proto, 'update_party')
     assert msg == {
         'command': 'update_party',
         'owner': test_id,
@@ -101,7 +101,7 @@ async def test_invite_non_existent_player(loop, lobby_server):
         ('test', 'test_password'), lobby_server
     )
 
-    await read_until(proto, lambda msg: msg['command'] == 'game_info')
+    await read_until_command(proto, 'game_info')
 
     proto.send_message({
         'command': 'invite_to_party',
@@ -117,7 +117,7 @@ async def test_accept_invite_non_existent(loop, lobby_server):
         ('test', 'test_password'), lobby_server
     )
 
-    await read_until(proto, lambda msg: msg['command'] == 'game_info')
+    await read_until_command(proto, 'game_info')
 
     proto.send_message({
         'command': 'accept_party_invite',
@@ -133,7 +133,7 @@ async def test_kick_player_non_existent(loop, lobby_server):
         ('test', 'test_password'), lobby_server
     )
 
-    await read_until(proto, lambda msg: msg['command'] == 'game_info')
+    await read_until_command(proto, 'game_info')
 
     proto.send_message({
         'command': 'kick_player_from_party',
@@ -149,7 +149,7 @@ async def test_party_while_queuing(loop, lobby_server):
         ('test', 'test_password'), lobby_server
     )
 
-    await read_until(proto, lambda msg: msg['command'] == 'game_info')
+    await read_until_command(proto, 'game_info')
 
     proto.send_message({
         'command': 'game_matchmaking',

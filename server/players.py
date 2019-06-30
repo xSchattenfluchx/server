@@ -122,8 +122,11 @@ class Player(BasePlayer):
         return self.game is not None
 
     def send_message(self, message):
-        assert self.lobby_connection
-        self.lobby_connection.send(message)
+        try:
+            self.lobby_connection.send(message)
+        except Exception:
+            # The player disconnected right as we tried to send a message
+            pass
 
     def to_dict(self):
         """

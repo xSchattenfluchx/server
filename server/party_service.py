@@ -55,7 +55,8 @@ class PartyService:
         pending_invite = self._pending_invites.pop((sender, recipient))
 
         if pending_invite.party != self.player_parties.get(sender):
-            raise ClientError("The party you're trying to join doesn't exist anymore.", recoverable=True)
+            recipient.send_message({'command': 'party_disbanded'})
+            return
 
         self.player_parties[recipient] = pending_invite.party
         pending_invite.party.add_player(recipient)

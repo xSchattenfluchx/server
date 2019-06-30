@@ -168,3 +168,53 @@ async def test_party_while_queuing(loop, lobby_server):
     proto.send_message({'command': 'kick_player_from_party'})
     msg = await proto.read_message()
     assert msg == {'command': 'invalid_state', 'state': PlayerState.SEARCHING_LADDER.value}
+
+
+async def test_join_party_after_disband(lobby_server):
+    p1_id, _, proto = await connect_and_sign_in(
+        ('test', 'test_password'), lobby_server
+    )
+
+    p2_id, _, proto2 = await connect_and_sign_in(
+        ('rhiza', 'puff_the_magic_dragon'), lobby_server
+    )
+
+    await read_until_command(proto, 'game_info')
+    await read_until_command(proto2, 'game_info')
+
+    # Player 1 invites player 2
+    proto.send_message({
+        'command': 'invite_to_party',
+        'recipient_id': p2_id,
+    })
+
+    await read_until_command(proto2, 'party_invite')
+
+    proto2.send_message({
+        'command': 'accept_party_invite',
+        'sender_id': p1_id,
+    })
+
+    await read_until_command(proto, 'update_party')
+    await read_until_command(proto2, 'update_party')
+
+    proto2.send_message({'command': 'leave_party'})
+    await read_until_command(proto, 'update_party')
+    proto.send_message({'command': 'leave_party'})
+    await proto.drain()
+
+    # Now player 2 invites player 1
+    proto2.send_message({
+        'command': 'invite_to_party',
+        'recipient_id': p1_id,
+    })
+
+    await read_until_command(proto, 'party_invite')
+
+    proto.send_message({
+        'command': 'accept_party_invite',
+        'sender_id': p2_id,
+    })
+
+    await read_until_command(proto, 'update_party')
+    await read_until_command(proto2, 'update_party')

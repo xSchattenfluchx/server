@@ -37,6 +37,7 @@ class PartyService:
             raise ClientError("You do not own this party.", recoverable=True)
 
         if sender.id in recipient.foes:
+            # TODO: Make this a separate command so it can be locallized correctly
             raise ClientError("This person doesn't accept invites from you.", recoverable=True)
 
         self._pending_invites[(sender, recipient)] = GroupInvite(sender, recipient, party, time.time())

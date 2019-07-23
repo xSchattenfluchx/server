@@ -23,6 +23,7 @@ async def test_invite_party_workflow(loop, lobby_server):
     await read_until_command(proto, 'game_info')
     await read_until_command(proto2, 'game_info')
 
+    # 1. Player sends party invite
     proto.send_message({
         'command': 'invite_to_party',
         'recipient_id': rhiza_id,
@@ -31,6 +32,7 @@ async def test_invite_party_workflow(loop, lobby_server):
     msg = await read_until_command(proto2, 'party_invite')
     assert msg == {'command': 'party_invite', 'sender': test_id}
 
+    # 2. Player accepts party invite
     proto2.send_message({
         'command': 'accept_party_invite',
         'sender_id': test_id,
@@ -46,6 +48,7 @@ async def test_invite_party_workflow(loop, lobby_server):
         'members_ready': []
     }
 
+    # 3. Player readies up
     proto2.send_message({'command': 'ready_party'})
 
     msg1 = await read_until_command(proto, 'update_party')
@@ -58,6 +61,7 @@ async def test_invite_party_workflow(loop, lobby_server):
         'members_ready': [rhiza_id]
     }
 
+    # 4. Player unreadies
     proto2.send_message({'command': 'unready_party'})
 
     msg1 = await read_until_command(proto, 'update_party')
@@ -70,6 +74,7 @@ async def test_invite_party_workflow(loop, lobby_server):
         'members_ready': []
     }
 
+    # 5. Player kicks other player from party
     proto.send_message({
         'command': 'kick_player_from_party',
         'kicked_player_id': rhiza_id,
@@ -85,6 +90,7 @@ async def test_invite_party_workflow(loop, lobby_server):
         'members_ready': []
     }
 
+    # 6. Player leaves party
     proto.send_message({'command': 'leave_party'})
 
     msg = await read_until_command(proto, 'update_party')
@@ -110,6 +116,48 @@ async def test_invite_non_existent_player(loop, lobby_server):
 
     msg = await proto.read_message()
     assert msg == {'command': 'notice', 'style': 'error', 'text': "The invited player doesn't exist"}
+
+
+async def test_multiple_invites_same_player(lobby_server):
+    test_id, _, proto = await connect_and_sign_in(
+        ('test', 'test_password'), lobby_server
+    )
+
+    rhiza_id, _, proto2 = await connect_and_sign_in(
+        ('rhiza', 'puff_the_magic_dragon'), lobby_server
+    )
+
+    newbie_id, _, proto3 = await connect_and_sign_in(
+        ('newbie', 'password'), lobby_server
+    )
+
+    # Send first invite
+    proto.send_message({
+        'command': 'invite_to_party',
+        'recipient_id': newbie_id,
+    })
+    await proto.drain()
+
+    msg = await read_until_command(proto3, 'party_invite')
+    assert msg == {'command': 'party_invite', 'sender': test_id}
+
+    # Accept first invite
+    proto3.send_message({
+        'command': 'accept_party_invite',
+        'sender_id': test_id,
+    })
+    await read_until_command(proto, 'update_party')
+    await read_until_command(proto3, 'update_party')
+
+    # Send second invite
+    proto2.send_message({
+        'command': 'invite_to_party',
+        'recipient_id': newbie_id,
+    })
+    await proto2.drain()
+
+    msg = await read_until_command(proto3, 'party_invite')
+    assert msg == {'command': 'party_invite', 'sender': rhiza_id}
 
 
 async def test_accept_invite_non_existent(loop, lobby_server):

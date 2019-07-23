@@ -1,6 +1,7 @@
 import asyncio
 import hashlib
 import logging
+from typing import Any, Callable, Dict, Tuple
 from unittest import mock
 
 import pytest
@@ -23,7 +24,8 @@ def mock_games(mock_players):
 
 
 @pytest.fixture
-def ladder_service(game_service):
+def ladder_service(mocker, game_service):
+    mocker.patch('server.matchmaker.matchmaker_queue.config.QUEUE_POP_TIME_MAX', 1)
     return LadderService(game_service)
 
 
@@ -51,13 +53,15 @@ def lobby_server(request, loop, player_service, game_service, geoip_service, lad
     return ctx
 
 
-async def connect_client(server):
+async def connect_client(server) -> QDataStreamProtocol:
     return QDataStreamProtocol(
         *(await asyncio.open_connection(*server.sockets[0].getsockname()))
     )
 
 
-async def perform_login(proto, credentials):
+async def perform_login(
+    proto: QDataStreamProtocol, credentials: Tuple[str, str]
+) -> None:
     login, pw = credentials
     pw_hash = hashlib.sha256(pw.encode('utf-8'))
     proto.send_message({
@@ -71,7 +75,9 @@ async def perform_login(proto, credentials):
     await proto.drain()
 
 
-async def read_until(proto, pred):
+async def read_until(
+    proto: QDataStreamProtocol, pred: Callable[[Dict[str, Any]], bool]
+) -> Dict[str, Any]:
     while True:
         msg = await proto.read_message()
         try:
@@ -82,7 +88,7 @@ async def read_until(proto, pred):
             pass
 
 
-async def read_until_command(proto, command):
+async def read_until_command(proto: QDataStreamProtocol, command: str) -> Dict[str, Any]:
     return await read_until(proto, lambda msg: msg.get('command') == command)
 
 

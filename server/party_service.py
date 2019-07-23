@@ -51,7 +51,7 @@ class PartyService:
             raise ClientError("You're not invited to a party", recoverable=True)
 
         if recipient in self.player_parties:
-            raise ClientError("You're already in a party", recoverable=True)
+            self.leave_party(recipient)
 
         pending_invite = self._pending_invites.pop((sender, recipient))
 

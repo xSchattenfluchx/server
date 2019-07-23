@@ -1,6 +1,23 @@
 from server.players import PlayerState
 
+from server.protocol import Protocol
 from .conftest import connect_and_sign_in, read_until_command
+
+
+async def invite_to_party(proto: Protocol, recipient_id: int) -> None:
+    proto.send_message({
+        'command': 'invite_to_party',
+        'recipient_id': recipient_id,
+    })
+    await proto.drain()
+
+
+async def accept_party_invite(proto: Protocol, sender_id: int) -> None:
+    proto.send_message({
+        'command': 'accept_party_invite',
+        'sender_id': sender_id,
+    })
+    await proto.drain()
 
 
 async def test_invite_party_workflow(loop, lobby_server):
@@ -24,19 +41,13 @@ async def test_invite_party_workflow(loop, lobby_server):
     await read_until_command(proto2, 'game_info')
 
     # 1. Player sends party invite
-    proto.send_message({
-        'command': 'invite_to_party',
-        'recipient_id': rhiza_id,
-    })
+    await invite_to_party(proto, rhiza_id)
 
     msg = await read_until_command(proto2, 'party_invite')
     assert msg == {'command': 'party_invite', 'sender': test_id}
 
     # 2. Player accepts party invite
-    proto2.send_message({
-        'command': 'accept_party_invite',
-        'sender_id': test_id,
-    })
+    await accept_party_invite(proto2, test_id)
 
     msg1 = await read_until_command(proto, 'update_party')
     msg2 = await read_until_command(proto2, 'update_party')
@@ -109,13 +120,14 @@ async def test_invite_non_existent_player(loop, lobby_server):
 
     await read_until_command(proto, 'game_info')
 
-    proto.send_message({
-        'command': 'invite_to_party',
-        'recipient_id': 2,
-    })
+    await invite_to_party(proto, 2)
 
     msg = await proto.read_message()
-    assert msg == {'command': 'notice', 'style': 'error', 'text': "The invited player doesn't exist"}
+    assert msg == {
+        'command': 'notice',
+        'style': 'error',
+        'text': "The invited player doesn't exist"
+    }
 
 
 async def test_multiple_invites_same_player(lobby_server):
@@ -132,29 +144,19 @@ async def test_multiple_invites_same_player(lobby_server):
     )
 
     # Send first invite
-    proto.send_message({
-        'command': 'invite_to_party',
-        'recipient_id': newbie_id,
-    })
-    await proto.drain()
+    await invite_to_party(proto, newbie_id)
 
     msg = await read_until_command(proto3, 'party_invite')
     assert msg == {'command': 'party_invite', 'sender': test_id}
 
     # Accept first invite
-    proto3.send_message({
-        'command': 'accept_party_invite',
-        'sender_id': test_id,
-    })
+    await accept_party_invite(proto3, test_id)
+
     await read_until_command(proto, 'update_party')
     await read_until_command(proto3, 'update_party')
 
     # Send second invite
-    proto2.send_message({
-        'command': 'invite_to_party',
-        'recipient_id': newbie_id,
-    })
-    await proto2.drain()
+    await invite_to_party(proto2, newbie_id)
 
     msg = await read_until_command(proto3, 'party_invite')
     assert msg == {'command': 'party_invite', 'sender': rhiza_id}
@@ -167,10 +169,7 @@ async def test_accept_invite_non_existent(loop, lobby_server):
 
     await read_until_command(proto, 'game_info')
 
-    proto.send_message({
-        'command': 'accept_party_invite',
-        'sender_id': 2,
-    })
+    await accept_party_invite(proto, 2)
 
     msg = await proto.read_message()
     assert msg == {'command': 'notice', 'style': 'error', 'text': "The inviting player doesn't exist"}
@@ -231,17 +230,11 @@ async def test_join_party_after_disband(lobby_server):
     await read_until_command(proto2, 'game_info')
 
     # Player 1 invites player 2
-    proto.send_message({
-        'command': 'invite_to_party',
-        'recipient_id': p2_id,
-    })
+    await invite_to_party(proto, p2_id)
 
     await read_until_command(proto2, 'party_invite')
 
-    proto2.send_message({
-        'command': 'accept_party_invite',
-        'sender_id': p1_id,
-    })
+    await accept_party_invite(proto2, p1_id)
 
     await read_until_command(proto, 'update_party')
     await read_until_command(proto2, 'update_party')
@@ -252,17 +245,11 @@ async def test_join_party_after_disband(lobby_server):
     await proto.drain()
 
     # Now player 2 invites player 1
-    proto2.send_message({
-        'command': 'invite_to_party',
-        'recipient_id': p1_id,
-    })
+    await invite_to_party(proto2, p1_id)
 
     await read_until_command(proto, 'party_invite')
 
-    proto.send_message({
-        'command': 'accept_party_invite',
-        'sender_id': p2_id,
-    })
+    await accept_party_invite(proto, p2_id)
 
     await read_until_command(proto, 'update_party')
     await read_until_command(proto2, 'update_party')

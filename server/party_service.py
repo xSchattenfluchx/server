@@ -48,7 +48,7 @@ class PartyService:
 
     def accept_invite(self, recipient: Player, sender: Player):
         if (sender, recipient) not in self._pending_invites:
-            raise ClientError("You're not invited to a party", recoverable=True)
+            raise ClientError("You're not invited to a party (anymore)", recoverable=True)
 
         if recipient in self.player_parties:
             self.leave_party(recipient)
@@ -79,6 +79,7 @@ class PartyService:
             return
 
         party.remove_player(kicked_player)
+        self.player_parties.pop(kicked_player)
         kicked_player.send_message({"command": "kicked_from_party"})
 
     def leave_party(self, player: Player):

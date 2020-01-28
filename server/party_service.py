@@ -25,7 +25,7 @@ class PartyService:
         self._pending_invites: dict[(Player, Player), GroupInvite] = dict()
 
     def get_party(self, owner: Player) -> Optional[PlayerParty]:
-        self.player_parties.get(owner)
+        return self.player_parties.get(owner)
 
     def invite_player_to_party(self, sender: Player, recipient: Player):
         if sender not in self.player_parties:
@@ -38,7 +38,7 @@ class PartyService:
 
         if sender.id in recipient.foes:
             # TODO: Make this a separate command so it can be locallized correctly
-            raise ClientError("This person doesn't accept invites from you.", recoverable=True)
+            raise ClientError("This person does not accept invites from you.", recoverable=True)
 
         self._pending_invites[(sender, recipient)] = GroupInvite(sender, recipient, party, time.time())
         recipient.send_message({
@@ -48,7 +48,7 @@ class PartyService:
 
     def accept_invite(self, recipient: Player, sender: Player):
         if (sender, recipient) not in self._pending_invites:
-            raise ClientError("You're not invited to a party (anymore)", recoverable=True)
+            raise ClientError("You are not invited to a party (anymore)", recoverable=True)
 
         if recipient in self.player_parties:
             self.leave_party(recipient)
@@ -66,14 +66,14 @@ class PartyService:
 
     def kick_player_from_party(self, owner: Player, kicked_player: Player):
         if owner not in self.player_parties:
-            raise ClientError("You're not in a party.", recoverable=True)
+            raise ClientError("You are not in a party.", recoverable=True)
 
         party = self.player_parties[owner]
 
         if party.owner != owner:
             raise ClientError("You do not own that party.", recoverable=True)
 
-        if kicked_player not in party.members:
+        if not any([m.player == kicked_player] for m in party.members):
             # Ensure client state is up to date
             party.send_party(owner)
             return
@@ -97,7 +97,7 @@ class PartyService:
 
         party = self.player_parties[player]
 
-        if player in party.members_ready:
+        if party.get_member_by_player(player).ready:
             # Ensure client state is up to date
             party.send_party(player)
             return
@@ -110,7 +110,7 @@ class PartyService:
 
         party = self.player_parties[player]
 
-        if player not in party.members_ready:
+        if not party.get_member_by_player(player).ready:
             # Ensure client state is up to date
             party.send_party(player)
             return

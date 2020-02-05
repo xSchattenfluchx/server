@@ -1,3 +1,5 @@
+from typing import List
+
 from server.players import Player
 from server.team_matchmaker.party_member import PartyMember
 
@@ -15,7 +17,7 @@ class PlayerParty:
         return all(member.ready for member in self._members)
 
     def get_member_by_player(self, player: Player):
-        return next([member for member in self._members if member.player == player])
+        return next(member for member in self._members if member.player == player)
 
     def add_player(self, player: Player):
         if not any([player == m.player for m in self._members]):
@@ -38,6 +40,12 @@ class PlayerParty:
     def unready_player(self, player: Player):
         for member in [m for m in self._members if m.player == player]:
             member.ready = False
+
+        self.broadcast_party()
+
+    def set_factions(self, player: Player, factions: List[bool]):
+        for member in [m for m in self._members if m.player == player]:
+            member.factions = factions
 
         self.broadcast_party()
 

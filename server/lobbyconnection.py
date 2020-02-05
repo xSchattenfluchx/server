@@ -942,12 +942,18 @@ class LobbyConnection():
         self.party_service.ready_player(self.player)
 
     async def command_unready_party(self, message):
-        # TODO: Cancel party search here if one exists
         self.party_service.unready_player(self.player)
 
     async def command_leave_party(self, _message):
         # TODO: Cancel party search here if one exists
         self.party_service.leave_party(self.player)
+
+    async def command_set_party_factions(self, message):
+        if len(message["factions"]) != 4 or not all(isinstance(f, bool) for f in message["factions"]):
+            self.abort("{} sent a wrongly formatted faction selection".format(self.player.login))
+
+        self.party_service.set_factions(self.player, message["factions"])
+
 
     def send_warning(self, message: str, fatal: bool=False):
         """

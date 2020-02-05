@@ -6,11 +6,11 @@ class PartyMember:
     def __init__(self, player: Player, ready: bool):
         self.player = player
         self.ready = ready
-        self.factions = [False, False, False, False]
+        self.factions = [True, True, True, True]
 
     def serialize(self):
         return {
-            "id": self.player.id,
+            "player": self.player.id,
             "ready": self.ready,
             "factions": self.factions
         }

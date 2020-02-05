@@ -1,9 +1,9 @@
 from server.players import Player
-from server.team_matchmaker import PartyMember
+from server.team_matchmaker.party_member import PartyMember
 
 class PlayerParty:
     def __init__(self, owner: Player):
-        self._members = {PartyMember(owner, False)}
+        self._members = [PartyMember(owner, False)]
         self.owner = owner
 
     @property
@@ -18,7 +18,8 @@ class PlayerParty:
         return next([member for member in self._members if member.player == player])
 
     def add_player(self, player: Player):
-        self._members.add(PartyMember(player))
+        if not any([player == m.player for m in self._members]):
+            self._members.append(PartyMember(player, False))
 
         self.broadcast_party()
 

@@ -119,8 +119,8 @@ class PartyService:
 
     def set_factions(self, player:Player, factions: List[bool]):
         if player not in self.player_parties:
-            # TODO create single person party
-            raise ClientError("You are not in a party.", recoverable=True)
+            self.player_parties[player] = PlayerParty(player)
+            # raise ClientError("You are not in a party.", recoverable=True) TODO can we just create a party here?
 
         party = self.player_parties[player]
         party.set_factions(player, factions)

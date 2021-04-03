@@ -803,7 +803,11 @@ incoming messages from other players.</p>
         if action in (&#34;PING&#34;, &#34;PONG&#34;):
             return {&#34;command&#34;: action.lower()}
 
-        message = json.loads(action)
+        try:
+            message = json.loads(action)
+        except json.decoder.JSONDecodeError as err:
+            raise json.decoder.JSONDecodeError(
+                &#34;Invalid JSON, full action string was: {}&#34;.format(action)) from err
         try:
             for part in self.read_block(block):
                 try:
@@ -983,7 +987,11 @@ def read_qstring(buffer: bytes, pos: int = 0) -&gt; Tuple[int, str]:
     if action in (&#34;PING&#34;, &#34;PONG&#34;):
         return {&#34;command&#34;: action.lower()}
 
-    message = json.loads(action)
+    try:
+        message = json.loads(action)
+    except json.decoder.JSONDecodeError as err:
+        raise json.decoder.JSONDecodeError(
+            &#34;Invalid JSON, full action string was: {}&#34;.format(action)) from err
     try:
         for part in self.read_block(block):
             try:
